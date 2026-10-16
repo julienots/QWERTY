@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Box, CollisionWorld } from '../physics/CollisionWorld';
 import type { Game } from '../Game';
 import type { Interactable } from './Zone';
-import { block, boxGeo, glassMaterial, mat } from './build';
+import { batchStatic, block, boxGeo, glassMaterial, mat } from './build';
 import { ScreenTexture } from '../fx/textures';
 
 /**
@@ -53,6 +53,10 @@ export class House {
     this.buildGarden();
     for (const d of this.doors) if (state.doorsOpen.includes(d.id)) this.setDoor(d, true, true);
     this.group.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.receiveShadow = true; });
+    // Moving parts stay separate; everything else is merged per material.
+    for (const d of this.doors) d.pivot.userData.dynamic = true;
+    this.fridgeDoor.userData.dynamic = true;
+    batchStatic(this.group);
   }
 
   // ---------------------------------------------------------------- shell
@@ -279,6 +283,7 @@ export class House {
       use: (game) => {
         this.radioPlaying = 9;
         game.audio.play('click');
+        game.hud.clearDialog();
         game.hud.say('Radio Val-Lumen', "…une pluie de météores d'une intensité jamais observée a illuminé le ciel cette nuit.", 5);
         game.hud.say('Radio Val-Lumen', "Un fragment lumineux serait tombé sur la colline au nord-est de la ville. Les habitants sont priés de ne pas s'en approcher…", 6);
         game.hud.say('Toi', "La colline au nord-est… C'est à quelques minutes d'ici. Je dois voir ça.", 4);
@@ -364,6 +369,7 @@ export class House {
         this.tv.on = !this.tv.on;
         this.tv.screen.draw(this.tv.on);
         game.audio.play('click');
+        if (this.tv.on) game.hud.clearDialog();
         if (this.tv.on) game.hud.say('Val-Lumen Info', "Les images de la nuit dernière : des dizaines de traînées lumineuses au-dessus de la ville.", 4);
         game.bus.emit('interact', 'tv');
       },
@@ -422,6 +428,7 @@ export class House {
       use: (game) => {
         game.audio.play('click');
         const lines = game.loreForComputer();
+        game.hud.clearDialog();
         for (const l of lines) game.hud.say('Ordinateur', l, 5);
         game.bus.emit('interact', 'computer');
       },
@@ -528,6 +535,7 @@ export class House {
       label: () => 'Lire le courrier',
       use: (game) => {
         game.audio.play('door', { pitch: 2 });
+        game.hud.clearDialog();
         game.hud.say('Courrier', '« Observatoire de Val-Lumen — Avis aux riverains : des anomalies gravitationnelles ont été mesurées cette semaine. Signalez tout phénomène inhabituel. »', 6);
         game.bus.emit('interact', 'mailbox');
       },

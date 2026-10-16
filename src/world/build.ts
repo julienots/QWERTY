@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { CollisionWorld } from '../physics/CollisionWorld';
 import { tex } from '../fx/textures';
 
@@ -74,4 +75,47 @@ export function block(
 /** Glass material shared by windows. */
 export function glassMaterial(): THREE.MeshStandardMaterial {
   return mat('#9cc7e0', { rough: 0.05, metal: 0.6, transparent: true, opacity: 0.35 });
+}
+
+/**
+ * Static batching: merges every non-moving mesh under `root` that shares a material into a
+ * single draw call. Objects (or ancestors) flagged with `userData.dynamic` are left alone.
+ * Cuts draw calls dramatically for furnished interiors on mobile GPUs.
+ */
+export function batchStatic(root: THREE.Object3D): number {
+  root.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+  const groups = new Map<string, { material: THREE.Material; cast: boolean; geos: THREE.BufferGeometry[] }>();
+  const victims: THREE.Mesh[] = [];
+  const isDynamic = (o: THREE.Object3D) => {
+    for (let p: THREE.Object3D | null = o; p && p !== root; p = p.parent) if (p.userData.dynamic) return true;
+    return false;
+  };
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh || (m as any).isInstancedMesh || Array.isArray(m.material) || isDynamic(m)) return;
+    const g = m.geometry;
+    if (!g.index || !g.getAttribute('normal') || !g.getAttribute('uv') || g.morphAttributes.position) return;
+    const geo = new THREE.BufferGeometry();
+    geo.setIndex(g.index.clone());
+    for (const name of ['position', 'normal', 'uv']) geo.setAttribute(name, g.getAttribute(name).clone());
+    geo.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld));
+    const key = m.material.uuid + (m.castShadow ? ':s' : '');
+    let entry = groups.get(key);
+    if (!entry) { entry = { material: m.material as THREE.Material, cast: m.castShadow, geos: [] }; groups.set(key, entry); }
+    entry.geos.push(geo);
+    victims.push(m);
+  });
+  for (const v of victims) v.parent?.remove(v);
+  let count = 0;
+  for (const { material, cast, geos } of groups.values()) {
+    const merged = mergeGeometries(geos, false);
+    if (!merged) continue;
+    const mesh = new THREE.Mesh(merged, material);
+    mesh.castShadow = cast;
+    mesh.receiveShadow = true;
+    root.add(mesh);
+    count++;
+  }
+  return victims.length - count;
 }

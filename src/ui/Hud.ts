@@ -91,6 +91,13 @@ export class Hud {
 
   get talking() { return this.lines.length > 0; }
 
+  /** Drops queued lines so an interaction's text appears immediately. */
+  clearDialog() {
+    this.lines.length = 0;
+    this.lineTime = 0;
+    this.dialog.classList.add('hidden');
+  }
+
   toast(text: string) {
     const t = document.createElement('div');
     t.className = 'toast';

@@ -4,7 +4,7 @@ import type { Game } from '../Game';
 import type { Interactable } from './Zone';
 import type { EarthTerrain } from './Terrain';
 import { CRASH_SITE, POND, WATER_LEVEL } from './Terrain';
-import { block, boxGeo, mat } from './build';
+import { batchStatic, block, boxGeo, mat } from './build';
 import { facadeTexture, tex } from '../fx/textures';
 import { mulberry32 } from '../core/noise';
 
@@ -52,6 +52,8 @@ export class Town {
     this.buildWaterTower();
     this.buildCrashSite();
     this.buildTrees(treeCount);
+    this.shard.userData.dynamic = true;
+    batchStatic(this.group);
   }
 
   // ------------------------------------------------------------------ roads
