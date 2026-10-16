@@ -1,0 +1,27 @@
+{
+  "name": "universe-ascendant",
+  "version": "0.1.0",
+  "private": true,
+  "description": "UNIVERSE ASCENDANT — SuperEssence Studio",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 4173",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "node tests/e2e/run.mjs",
+    "android:sync": "npm run build && npx cap sync android",
+    "android:apk": "npm run android:sync && cd android && ./gradlew assembleDebug"
+  },
+  "dependencies": {
+    "three": "0.170.0"
+  },
+  "devDependencies": {
+    "@types/three": "0.170.0",
+    "typescript": "5.6.3",
+    "vite": "5.4.21",
+    "vitest": "2.1.9",
+    "playwright": "1.56.1"
+  }
+}

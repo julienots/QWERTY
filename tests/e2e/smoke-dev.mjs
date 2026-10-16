@@ -1,0 +1,18 @@
+import { chromium } from 'playwright';
+const url = process.argv[2] ?? 'http://localhost:4173/';
+const out = process.argv[3] ?? '.';
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+const errors = [];
+page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(m.type() + ': ' + m.text()); });
+page.on('pageerror', (e) => errors.push('pageerror: ' + e.stack));
+await page.goto(url);
+await page.waitForSelector('#title:not(.hidden)', { timeout: 30000 });
+await page.screenshot({ path: out + '/title.png' });
+await page.click('[data-testid=new-game]');
+await page.waitForTimeout(4000);
+await page.screenshot({ path: out + '/start.png' });
+const info = await page.evaluate(() => { const g = window.__UA; return { pos: g.player.position.toArray(), zone: g.zone.id, fps: g.perf.fps, calls: g.renderer.info.render.calls, tris: g.renderer.info.render.triangles }; });
+console.log(JSON.stringify(info));
+console.log(errors.slice(0, 20).join('\n'));
+await browser.close();

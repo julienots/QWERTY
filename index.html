@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#000000" />
+    <link rel="icon" href="./superessence-logo.jpg" />
+    <title>Universe Ascendant — SuperEssence Studio</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="loading" class="screen"><div class="spinner"></div><p>Chargement de l'univers…</p></div>
+    <div id="title" class="screen title hidden">
+      <div class="title-bg"></div>
+      <img class="studio-logo" src="./superessence-logo.jpg" alt="SuperEssence Studio" />
+      <h1>UNIVERSE<span>ASCENDANT</span></h1>
+      <p class="tagline">De simple humain à dieu du cosmos.</p>
+      <div class="title-buttons">
+        <button data-action="continue" data-testid="continue" class="primary hidden">Continuer</button>
+        <button data-action="new" data-testid="new-game">Nouvelle partie</button>
+        <button data-action="creative" data-testid="creative">Mode créatif</button>
+      </div>
+      <p class="version">v0.1.0 — prototype jouable (phases B &amp; C)</p>
+    </div>
+    <div id="confirm-new" class="screen modal hidden">
+      <div class="modal-box">
+        <p>Commencer une nouvelle partie remplacera ta sauvegarde de survie actuelle. Continuer ?</p>
+        <div class="title-buttons row">
+          <button data-action="cancel">Annuler</button>
+          <button data-action="confirm" data-testid="confirm-new" class="danger">Nouvelle partie</button>
+        </div>
+      </div>
+    </div>
+    <div id="fatal" class="screen modal hidden"><div class="modal-box"><p>Une erreur empêche le jeu de démarrer :</p><pre></pre></div></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

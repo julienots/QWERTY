@@ -1,0 +1,38 @@
+import { chromium } from 'playwright';
+const [url, out] = [process.argv[2], process.argv[3]];
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+const errors = [];
+page.on('pageerror', (e) => errors.push('pageerror: ' + e.stack));
+page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+await page.addInitScript(() => localStorage.setItem('ua.settings', JSON.stringify({ autoQuality: false, quality: 'medium' })));
+await page.goto(url);
+await page.waitForSelector('#title:not(.hidden)');
+await page.click('[data-testid=new-game]');
+await page.waitForTimeout(1500);
+const shot = async (name, setup) => {
+  await page.evaluate(setup);
+  // run some simulation frames deterministically
+  await page.evaluate(() => { const g = window.__UA; for (let i = 0; i < 40; i++) g.update(1 / 30); });
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `${out}/${name}.png` });
+};
+await shot('01-bedroom', () => {});
+await shot('02-front', () => { const g = window.__UA; g.player.setPosition(-2.5, 0, 14); g.player.yaw = Math.PI; g.cameraRig.yaw = Math.PI; g.cameraRig.pitch = 0.1; g.time = 10; });
+await shot('03-street', () => { const g = window.__UA; g.player.setPosition(25, 0.15, 12.2); g.player.yaw = -Math.PI/2; g.cameraRig.yaw = -Math.PI / 2 - 0.4; g.cameraRig.pitch = 0.15; });
+await shot('04-crash', () => { const g = window.__UA; g.teleport(190, -195); g.cameraRig.yaw = Math.atan2(15, -20); g.cameraRig.pitch = 0.2; g.time = 18.9; });
+await shot('05-tower', () => { const g = window.__UA; g.teleport(-75, -45); g.cameraRig.yaw = Math.atan2(-15, -15); g.cameraRig.pitch = -0.2; g.time = 12; });
+await shot('06-night', () => { const g = window.__UA; g.player.setPosition(0, 0.15, 21.8); g.cameraRig.yaw = 0.3; g.cameraRig.pitch = 0.12; g.time = 22.5; });
+await shot('07-rain', () => { const g = window.__UA; g.time = 15; g.sky.setWeather('storm', true); g.player.setPosition(-30, 0.15, 12.2); g.cameraRig.yaw = Math.PI / 2; });
+await shot('08-combat', () => { const g = window.__UA; g.sky.setWeather('clear', true); g.time = 11; g.progress.setStage(2); for (const p of ['essence_bolt','fireball','flight','essence_push']) g.powers.unlock(p, true); g.teleport(100, -70); for (const id of ['void_stalker','void_spitter','void_brute','void_drone']) g.enemies.spawn(id, 96 + Math.random()*8, -58 + Math.random()*4, { game: g }); g.cameraRig.yaw = 0; g.cameraRig.pitch = 0.15; g.powers.setActive('fireball'); g.powers.cast(); });
+await shot('09-fly', () => { const g = window.__UA; g.player.setPosition(0, 120, 0); g.player.flying = true; g.cameraRig.pitch = 0.35; g.cameraRig.yaw = 2.4; });
+await page.evaluate(() => window.__UA.menu.open('powers'));
+await page.waitForTimeout(300);
+await page.screenshot({ path: `${out}/10-menu-powers.png` });
+await page.evaluate(() => window.__UA.menu.open('map'));
+await page.waitForTimeout(300);
+await page.screenshot({ path: `${out}/11-menu-map.png` });
+const info = await page.evaluate(() => { const g = window.__UA; return { calls: g.renderer.info.render.calls, tris: g.renderer.info.render.triangles, geos: g.renderer.info.memory.geometries, tex: g.renderer.info.memory.textures }; });
+console.log(JSON.stringify(info));
+console.log(errors.join('\n') || 'no errors');
+await browser.close();
