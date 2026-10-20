@@ -30,7 +30,9 @@ import type { Interactable, Zone } from './world/Zone';
 import { EarthZone } from './world/EarthZone';
 import type { EarthSky } from './world/EarthSky';
 import type { Townsfolk } from './world/Townsfolk';
-import { clearMaterialCache } from './world/build';
+import { clearMaterialCache, useAssets } from './world/build';
+import type { Assets } from './core/Assets';
+import type { BodyKind } from './player/CharacterModel';
 
 export interface ShipLike { active: boolean; position: THREE.Vector3 }
 
@@ -84,7 +86,7 @@ export class Game {
   private fade: HTMLElement;
   onExitToTitle: () => void = () => {};
 
-  constructor(private container: HTMLElement, storage: KeyValueStorage) {
+  constructor(private container: HTMLElement, storage: KeyValueStorage, readonly assets: Assets | null = null) {
     this.settings = loadSettings(storage);
     this.storage = storage;
     this.saves = new SaveSystem(storage);
@@ -100,9 +102,13 @@ export class Game {
     container.appendChild(this.renderer.domElement);
     setMaxAnisotropy(Math.min(8, this.renderer.capabilities.getMaxAnisotropy()));
     // Image-based ambient lighting so PBR metals and glossy surfaces read correctly.
+    // Real captured sky (Poly Haven HDRI) when available; neutral studio environment otherwise.
     const pmrem = new THREE.PMREMGenerator(this.renderer);
-    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.dayEnvironment = assets?.hdr ? pmrem.fromEquirectangular(assets.hdr).texture : pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environment = this.dayEnvironment;
     pmrem.dispose();
+    assets?.setAnisotropy(Math.min(8, this.renderer.capabilities.getMaxAnisotropy()));
+    useAssets(assets);
 
     this.hud = new Hud(container);
     this.input = new Input(container, this.settings);
@@ -140,6 +146,9 @@ export class Game {
   }
 
   private storage: KeyValueStorage;
+  dayEnvironment: THREE.Texture | null = null;
+  /** Body chosen for a new game (character selection screen). */
+  newGameBody: BodyKind = 'human_male';
 
   // ------------------------------------------------------------------ setup
   private setQualityProfile() {
@@ -226,7 +235,9 @@ export class Game {
       data = r.data;
       if (r.source === 'backup') console.warn('Sauvegarde principale invalide, secours utilisé', r.errors);
     }
-    this.applySave(data ?? newSave(mode));
+    const save = data ?? newSave(mode);
+    if (!data) save.player.body = this.newGameBody;
+    this.applySave(save);
     this.ready = true;
     this.setPaused(false);
     if (fresh || !data) this.intro();
@@ -253,10 +264,10 @@ export class Game {
     } else this.powers.load(d.powers.unlocked, d.powers.favorites, d.powers.active, d.powers.levels);
 
     // Player
-    if (this.player) this.scene.remove(this.player.model.root);
-    this.player = new Player(this.currentSkin());
+    if (this.player) this.scene.remove(this.player.root);
+    this.player = new Player(this.currentSkin(), this.assets, (d.player.body as BodyKind | undefined) ?? 'human_male');
     this.player.stageRef = () => this.progress.stage;
-    this.scene.add(this.player.model.root);
+    this.scene.add(this.player.root);
     this.loadZone(d.player.zone);
     const [x, y, z] = d.player.position;
     this.player.setPosition(x, y, z);
@@ -312,6 +323,8 @@ export class Game {
       fragments: this.progress.fragments,
       skin: this.skinId,
       flying: p.flying,
+      oxygen: d.player.oxygen ?? 100,
+      body: d.player.body ?? 'human_male',
     };
     d.powers = {
       unlocked: this.mode === 'creative' ? [] : [...this.powers.unlocked],

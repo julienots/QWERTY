@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import type { Body } from '../physics/CollisionWorld';
 import type { Game } from '../Game';
 import { Humanoid } from './Humanoid';
+import { CharacterModel, type Avatar, type BodyKind } from './CharacterModel';
+import type { Assets } from '../core/Assets';
 import { angleLerp, clamp, damp } from '../core/noise';
 import type { SkinDef } from '../content/types';
 
@@ -14,7 +16,10 @@ export const STAGE_HEALTH = [100, 130, 180, 250, 350, 500];
  */
 export class Player {
   readonly body: Body = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, radius: 0.33, height: 1.75, onGround: false, stepHeight: 0.45 };
-  readonly model: Humanoid;
+  /** Stable scene node; the avatar inside can be swapped when the outfit changes body type. */
+  readonly root = new THREE.Group();
+  model: Avatar;
+  private bodyKind: BodyKind | 'procedural' = 'procedural';
   yaw = 0;
   health = 100;
   energy = 0;
@@ -37,15 +42,31 @@ export class Player {
   private shieldMesh: THREE.Mesh;
   private time = 0;
 
-  constructor(skin: SkinDef) {
-    this.model = new Humanoid({ skin: skin.skin, suit: skin.suit, accent: skin.accent, hair: skin.hair, aura: skin.aura });
+  constructor(skin: SkinDef, private assets: Assets | null = null, private baseBody: BodyKind = 'human_male') {
+    this.model = this.makeAvatar(skin);
+    this.root.add(this.model.root);
     this.shieldMesh = new THREE.Mesh(
       new THREE.SphereGeometry(1.25, 24, 16),
       new THREE.MeshBasicMaterial({ color: '#88aaff', transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false }),
     );
     this.shieldMesh.position.y = 0.95;
     this.shieldMesh.visible = false;
-    this.model.root.add(this.shieldMesh);
+    this.root.add(this.shieldMesh);
+  }
+
+  /** Real rigged character when assets are loaded, procedural figure otherwise. */
+  private makeAvatar(skin: SkinDef): Avatar {
+    const kind: BodyKind = skin.model === 'suit' ? 'suit_body' : this.baseBody;
+    let a: Avatar;
+    if (CharacterModel.available(this.assets, kind)) {
+      a = new CharacterModel(this.assets!, kind);
+      this.bodyKind = kind;
+    } else {
+      a = new Humanoid({ skin: skin.skin, suit: skin.suit, accent: skin.accent, hair: skin.hair, aura: skin.aura });
+      this.bodyKind = 'procedural';
+    }
+    a.setColors({ skin: skin.skin, suit: skin.suit, accent: skin.accent, hair: skin.hair, aura: skin.aura });
+    return a;
   }
 
   get maxHealth() { return STAGE_HEALTH[this.stageRef()]; }
@@ -53,6 +74,12 @@ export class Player {
   stageRef: () => number = () => 0;
 
   setSkin(s: SkinDef) {
+    const want: BodyKind = s.model === 'suit' ? 'suit_body' : this.baseBody;
+    if (this.bodyKind !== 'procedural' && want !== this.bodyKind) {
+      this.root.remove(this.model.root);
+      this.model = this.makeAvatar(s);
+      this.root.add(this.model.root);
+    }
     this.model.setColors({ skin: s.skin, suit: s.suit, accent: s.accent, hair: s.hair, aura: s.aura });
     (this.shieldMesh.material as THREE.MeshBasicMaterial).color.set(s.aura);
   }
@@ -248,8 +275,8 @@ export class Player {
     const turn = (this.yaw - this.lastYaw) / Math.max(dt, 1e-3);
     this.lastYaw = this.yaw;
     this.model.turnRate = clamp(turn, -4, 4);
-    this.model.root.position.copy(this.position);
-    this.model.root.rotation.y = this.yaw;
+    this.root.position.copy(this.position);
+    this.root.rotation.y = this.yaw;
     const flyFwd = this.flying ? clamp(Math.hypot(b.vx, b.vz, b.vy * 0.5) / 12, 0, 1) : 0;
     this.model.update(dt, { speed: hSpeed, grounded: b.onGround, flying: this.flying, vy: b.vy, flyForward: flyFwd, cast: this.castT, punch: this.punchT });
     // Aura when awakened

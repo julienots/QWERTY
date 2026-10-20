@@ -71,7 +71,9 @@ export type ObjectiveDef =
   | { type: 'kill'; enemy: string | '*'; count: number; text: string; spawn?: { x: number; z: number; count: number } }
   | { type: 'waves'; waves: number; x: number; z: number; enemies: string[]; text: string }
   | { type: 'altitude'; value: number; text: string }
-  | { type: 'usePower'; power: string; count: number; text: string };
+  | { type: 'usePower'; power: string; count: number; text: string }
+  | { type: 'zone'; zone: string; text: string }
+  | { type: 'board'; text: string };
 
 export interface MissionDef {
   id: string;
@@ -81,7 +83,31 @@ export interface MissionDef {
   requires?: string;
   main: boolean;
   objectives: ObjectiveDef[];
-  rewards: { xp: number; fragments?: number; powers?: string[]; stage?: number; items?: Record<string, number> };
+  rewards: { xp: number; fragments?: number; powers?: string[]; stage?: number; items?: Record<string, number>; ships?: string[] };
+}
+
+export type ShipClass = 'scout' | 'explorer' | 'fighter' | 'transport' | 'alien' | 'titan';
+export type ShipModel = 'scout' | 'fighter' | 'explorer' | 'alien';
+
+export interface ShipDef {
+  id: string;
+  name: string;
+  description: string;
+  shipClass: ShipClass;
+  model: ShipModel;
+  color: string;
+  accent: string;
+  /** Cruise speed in space (m/s); atmosphere speed is a fraction of it. */
+  maxSpeed: number;
+  boost: number;
+  accel: number;
+  turnRate: number;
+  hull: number;
+  energy: number;
+  canWarp: boolean;
+  weaponDamage: number;
+  weaponRate: number;
+  unlockStage: number;
 }
 
 export interface SkinDef {
@@ -93,6 +119,8 @@ export interface SkinDef {
   aura: string;
   hair: string;
   unlockStage: number;
+  /** 'base' keeps the player's chosen human body; 'suit' uses the armoured suit body. */
+  model?: 'base' | 'suit';
 }
 
 export interface ContentPack {
@@ -108,6 +136,7 @@ export interface ContentPack {
   enemies?: EnemyDef[];
   missions?: MissionDef[];
   skins?: SkinDef[];
+  ships?: ShipDef[];
 }
 
 export const GAME_CONTENT_API = 1;

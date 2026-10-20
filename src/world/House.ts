@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Box, CollisionWorld } from '../physics/CollisionWorld';
 import type { Game } from '../Game';
 import type { Interactable } from './Zone';
-import { batchStatic, block, boxGeo, glassMaterial, mat } from './build';
+import { batchStatic, block, boxGeo, glassMaterial, mat, placeModel, type Placement } from './build';
 import { ScreenTexture } from '../fx/textures';
 
 /**
@@ -44,6 +44,8 @@ export class House {
   private fridgeOpen = 0;
   private radioLed!: THREE.MeshStandardMaterial;
   private radioPlaying = 0;
+  /** Procedural meshes of each furniture section (replaced when a real model exists). */
+  private sections = new Map<string, THREE.Object3D[]>();
 
   constructor(private physics: CollisionWorld, state: { lightsOn: string[]; doorsOpen: string[] }) {
     this.buildShell();
@@ -243,26 +245,33 @@ export class House {
     const F = FLOOR;
 
     // ---- Bedroom (x -7..-1, z -6..0)
+    let k = this.mark();
     block(g, p, -6.9, F, -5.9, -4.8, F + 0.42, -4.2, { material: wood });
+    block(g, p, -6.98, F, -5.95, -6.88, F + 1.1, -4.15, { material: wood }); // headboard
+    this.section('bed', k);
     block(g, null, -6.85, F + 0.42, -5.85, -4.85, F + 0.62, -4.25, { material: white, collide: false });
     block(g, null, -5.6, F + 0.6, -5.85, -4.85, F + 0.66, -4.25, { material: fabricBlue, collide: false });
     block(g, null, -6.75, F + 0.62, -5.6, -6.3, F + 0.72, -4.5, { material: white, collide: false }); // pillow
-    block(g, p, -6.98, F, -5.95, -6.88, F + 1.1, -4.15, { material: wood }); // headboard
     this.interactables.push({
       id: 'bed', position: new THREE.Vector3(-5.8, 0.8, -4.2), radius: 1.8, icon: '🛏',
       label: (game) => (game.isNight() ? 'Dormir jusqu’au matin' : 'Se reposer'),
       use: (game) => game.sleep(),
     });
     // Nightstand + lamp
+    k = this.mark();
     block(g, p, -6.9, F, -4.1, -6.4, F + 0.5, -3.6, { material: wood });
     const lampShade = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.16, 0.2, 16, 1, true), mat('#f6e7c8', { emissive: '#ffcf8a', emissiveIntensity: 0.6 }));
     lampShade.position.set(-6.65, F + 0.82, -3.85);
     g.add(lampShade);
     block(g, null, -6.67, F + 0.5, -3.87, -6.63, F + 0.72, -3.83, { material: metal, collide: false });
+    this.section('nightstand', k);
     // Desk + radio (mission object)
+    k = this.mark();
     block(g, p, -1.75, F + 0.72, -4.2, -1.1, F + 0.77, -2.2, { material: lightWood });
     for (const [x, z] of [[-1.7, -4.15], [-1.15, -4.15], [-1.7, -2.25], [-1.15, -2.25]]) block(g, null, x - 0.03, F, z - 0.03, x + 0.03, F + 0.72, z + 0.03, { material: metal, collide: false });
+    this.section('desk', k);
     p.addBox(-1.75, F, -4.2, -1.1, F + 0.72, -2.2);
+    k = this.mark();
     block(g, null, -1.6, F + 0.77, -3.4, -1.25, F + 0.97, -2.9, { material: mat('#4a3b2f', { rough: 0.5 }), collide: false });
     const grill = new THREE.Mesh(new THREE.CircleGeometry(0.07, 16), dark);
     grill.rotation.y = Math.PI / 2;
@@ -277,6 +286,7 @@ export class House {
     antenna.position.set(-1.35, F + 1.12, -3.0);
     antenna.rotation.z = 0.4;
     g.add(antenna);
+    this.section('radio', k);
     this.interactables.push({
       id: 'radio', position: new THREE.Vector3(-1.45, F + 0.9, -3.1), radius: 1.7, icon: '📻',
       label: () => 'Écouter la radio',
@@ -293,8 +303,10 @@ export class House {
     // Chair
     this.chair(-2.1, -3.2, Math.PI / 2, lightWood);
     // Wardrobe (skins)
+    k = this.mark();
     block(g, p, -6.95, F, -2.1, -6.3, F + 2.1, -0.3, { material: wood });
     block(g, null, -6.31, F + 0.1, -1.2, -6.29, F + 2.0, -1.18, { material: dark, collide: false });
+    this.section('wardrobe', k);
     this.interactables.push({
       id: 'wardrobe', position: new THREE.Vector3(-6.2, 1.2, -1.2), radius: 1.6, icon: '👕',
       label: () => 'Changer de tenue',
@@ -344,8 +356,10 @@ export class House {
       },
     });
     // Kitchen table
+    k = this.mark();
     block(g, p, 3.8, F + 0.72, -3.0, 5.2, F + 0.77, -2.0, { material: lightWood });
     for (const [x, z] of [[3.85, -2.95], [5.15, -2.95], [3.85, -2.05], [5.15, -2.05]]) block(g, null, x - 0.03, F, z - 0.03, x + 0.03, F + 0.72, z + 0.03, { material: lightWood, collide: false });
+    this.section('kitchen_table', k);
     p.addBox(3.8, F, -3.0, 5.2, F + 0.72, -2.0);
     this.chair(4.5, -1.6, Math.PI, lightWood);
     this.chair(4.5, -3.4, 0, lightWood);
@@ -375,15 +389,20 @@ export class House {
       },
     });
     // Sofa facing the TV
+    k = this.mark();
     block(g, p, -4.2, F, 1.8, -3.3, F + 0.45, 4.2, { material: fabricGrey });
     block(g, p, -3.45, F, 1.8, -3.15, F + 0.95, 4.2, { material: fabricGrey });
     block(g, null, -4.2, F + 0.45, 1.8, -3.45, F + 0.7, 2.05, { material: fabricGrey, collide: false });
     block(g, null, -4.2, F + 0.45, 3.95, -3.45, F + 0.7, 4.2, { material: fabricGrey, collide: false });
     block(g, null, -4.1, F + 0.45, 2.1, -3.5, F + 0.6, 2.95, { material: fabricBlue, collide: false });
     block(g, null, -4.1, F + 0.45, 3.05, -3.5, F + 0.6, 3.9, { material: fabricBlue, collide: false });
+    this.section('sofa', k);
     // Coffee table
+    k = this.mark();
     block(g, p, -5.6, F, 2.5, -4.8, F + 0.4, 3.5, { material: lightWood });
+    this.section('coffee_table', k);
     // Bookshelf
+    k = this.mark();
     block(g, p, -2.6, F, 0.1, -1.2, F + 1.9, 0.45, { material: wood });
     const bookCols = ['#a33', '#36a', '#3a6', '#cc3', '#639', '#c63'];
     for (let r = 0; r < 4; r++) {
@@ -395,20 +414,25 @@ export class House {
         x += w + 0.01;
       }
     }
+    this.section('bookshelf', k);
     // Plant
+    k = this.mark();
     block(g, p, -6.8, F, 5.4, -6.4, F + 0.4, 5.8, { material: mat('#a35a3a', { rough: 0.8 }) });
     const leaves = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 1), mat('#3f7a3a', { rough: 0.8 }));
     leaves.position.set(-6.6, F + 0.85, 5.6);
     leaves.scale.set(1, 1.3, 1);
     leaves.castShadow = true;
     g.add(leaves);
+    this.section('plant', k);
     // Rug
     block(g, null, -6, F, 1.9, -4.4, F + 0.015, 4.1, { material: mat('#c9b48a', { map: 'fabric' }), collide: false, castShadow: false });
 
     // ---- Dining / office (x 2..7, z 0..6)
+    k = this.mark();
     block(g, p, 3.8, F + 0.73, 3.0, 5.6, F + 0.78, 4.2, { material: wood });
     p.addBox(3.8, F, 3.0, 5.6, F + 0.73, 4.2);
     for (const [x, z] of [[3.85, 3.05], [5.55, 3.05], [3.85, 4.15], [5.55, 4.15]]) block(g, null, x - 0.04, F, z - 0.04, x + 0.04, F + 0.73, z + 0.04, { material: wood, collide: false });
+    this.section('dining_table', k);
     this.chair(4.3, 2.5, 0, wood);
     this.chair(5.1, 2.5, 0, wood);
     this.chair(4.3, 4.7, Math.PI, wood);
@@ -416,11 +440,13 @@ export class House {
     // Computer desk
     block(g, p, 6.3, F + 0.72, 0.3, 6.95, F + 0.76, 1.9, { material: white });
     p.addBox(6.3, F, 0.3, 6.95, F + 0.72, 1.9);
+    k = this.mark();
     block(g, null, 6.75, F + 0.76, 0.75, 6.8, F + 1.2, 1.45, { material: dark, collide: false });
     const monitorGlow = new THREE.Mesh(new THREE.PlaneGeometry(0.66, 0.4), new THREE.MeshBasicMaterial({ color: '#4d8bd6', toneMapped: false }));
     monitorGlow.rotation.y = -Math.PI / 2;
     monitorGlow.position.set(6.745, F + 0.99, 1.1);
     g.add(monitorGlow);
+    this.section('computer', k);
     this.chair(5.9, 1.1, -Math.PI / 2, dark);
     this.interactables.push({
       id: 'computer', position: new THREE.Vector3(6.5, 1.0, 1.1), radius: 1.7, icon: '💻',
@@ -433,9 +459,13 @@ export class House {
         game.bus.emit('interact', 'computer');
       },
     });
+    this.furnishWithRealModels();
   }
 
   private chair(x: number, z: number, rot: number, m: THREE.Material) {
+    this.physics.addBox(x - 0.24, FLOOR, z - 0.24, x + 0.24, FLOOR + 0.45, z + 0.24);
+    const real = placeModel('chair', { x, y: FLOOR, z, w: 0.48, h: 0.95, d: 0.5, rotY: rot + Math.PI, align: false });
+    if (real) { this.group.add(real); return; }
     const c = new THREE.Group();
     const seat = new THREE.Mesh(boxGeo(0.45, 0.05, 0.45), m);
     seat.position.y = 0.45;
@@ -451,7 +481,45 @@ export class House {
     c.position.set(x, FLOOR, z);
     c.rotation.y = rot;
     this.group.add(c);
-    this.physics.addBox(x - 0.24, FLOOR, z - 0.24, x + 0.24, FLOOR + 0.45, z + 0.24);
+  }
+
+  private mark(): number { return this.group.children.length; }
+  private section(key: string, from: number) { this.sections.set(key, this.group.children.slice(from)); }
+
+  /** Replaces a procedural section by a real model (keeps colliders and interactions). */
+  private real(key: string | null, model: string, pl: Placement): boolean {
+    const m = placeModel(model, pl);
+    if (!m) return false;
+    if (key) for (const o of this.sections.get(key) ?? []) this.group.remove(o);
+    m.userData.dynamic = false;
+    this.group.add(m);
+    return true;
+  }
+
+  private furnishWithRealModels() {
+    const F = FLOOR;
+    // Bedroom
+    this.real('bed', 'bed_frame', { x: -5.85, y: F, z: -5.05, w: 2.2, h: 1.15, d: 1.75, rotY: Math.PI / 2, stretch: true });
+    this.real('nightstand', 'nightstand', { x: -6.62, y: F, z: -3.85, w: 0.5, h: 0.62, d: 0.5, rotY: Math.PI / 2 });
+    this.real('desk', 'desk', { x: -1.42, y: F, z: -3.2, w: 0.66, h: 0.77, d: 2.0, stretch: true });
+    this.real('radio', 'radio', { x: -1.43, y: F + 0.77, z: -3.15, w: 0.42, h: 0.32, d: 0.42, rotY: -Math.PI / 2 });
+    this.real(null, 'desk_lamp', { x: -1.45, y: F + 0.77, z: -4.0, w: 0.3, h: 0.5, d: 0.3, rotY: -Math.PI / 2 });
+    this.real('wardrobe', 'wardrobe', { x: -6.62, y: F, z: -1.2, w: 0.66, h: 2.05, d: 1.8, rotY: Math.PI / 2 });
+    this.real(null, 'picture_frame', { x: -4.0, y: 1.25, z: -5.88, w: 0.6, h: 0.85, d: 0.04 });
+    // Kitchen
+    this.real(null, 'microwave', { x: 5.6, y: F + 0.93, z: -5.62, w: 0.55, h: 0.33, d: 0.4 });
+    this.real('kitchen_table', 'dining_table', { x: 4.5, y: F, z: -2.5, w: 1.4, h: 0.77, d: 1.0, stretch: true });
+    // Living room
+    this.real('sofa', 'sofa', { x: -3.68, y: F, z: 3.0, w: 1.05, h: 0.95, d: 2.4, rotY: -Math.PI / 2 });
+    this.real(null, 'pillows', { x: -3.7, y: F + 0.45, z: 3.0, w: 0.5, h: 0.4, d: 1.2, rotY: -Math.PI / 2 });
+    this.real('coffee_table', 'coffee_table', { x: -5.2, y: F, z: 3.0, w: 0.8, h: 0.42, d: 1.0 });
+    this.real('bookshelf', 'bookshelf', { x: -1.9, y: F, z: 0.28, w: 1.4, h: 1.95, d: 0.4 });
+    this.real('plant', 'plant', { x: -6.6, y: F, z: 5.6, w: 0.7, h: 1.2, d: 0.7 });
+    if (this.real(null, 'armchair', { x: -5.6, y: F, z: 5.2, w: 0.85, h: 1.0, d: 0.85, rotY: -Math.PI * 0.75 })) this.physics.addBox(-6.0, F, 4.8, -5.2, F + 0.5, 5.6);
+    this.real(null, 'wall_clock', { x: -0.6, y: 1.9, z: 0.13, w: 0.32, h: 0.32, d: 0.05 });
+    // Dining / office
+    this.real('dining_table', 'dining_table', { x: 4.7, y: F, z: 3.6, w: 1.8, h: 0.78, d: 1.2, stretch: true });
+    this.real('computer', 'laptop', { x: 6.62, y: F + 0.76, z: 1.1, w: 0.45, h: 0.3, d: 0.35, rotY: -Math.PI / 2 });
   }
 
   // ---------------------------------------------------------------- lights
@@ -476,6 +544,12 @@ export class House {
       plate.position.copy(sw);
       if (id === 'dining') plate.rotation.y = Math.PI / 2;
       this.group.add(plate);
+      const pendant = placeModel('ceiling_lamp', { x, y: H - 0.62, z, w: 0.45, h: 0.62, d: 0.45 });
+      if (pendant) {
+        this.group.add(pendant);
+        lamp.scale.setScalar(0.35);
+        lamp.position.y = H - 0.5;
+      }
       const rl: RoomLight = { id, name, light, fixture, on: false };
       this.lights.push(rl);
       this.setLight(rl, initiallyOn.includes(id));
@@ -549,6 +623,17 @@ export class House {
       g.add(f);
     }
     block(g, null, -6.9, 0, 6.8, 0.6, 0.1, 8.0, { material: mat('#4a3626', { rough: 1 }), collide: false, castShadow: false });
+    // Garden decor (real models when available)
+    for (const [m, pl] of [
+      ['garden_gnome', { x: -5.6, y: 0.1, z: 7.5, w: 0.3, h: 0.55, d: 0.3, rotY: 0.4 }],
+      ['planter', { x: -4.1, y: 0, z: 6.7, w: 0.9, h: 0.45, d: 0.42 }],
+      ['planter', { x: -0.9, y: 0, z: 6.7, w: 0.9, h: 0.45, d: 0.42 }],
+      ['picnic_table', { x: 4.5, y: 0, z: -8.0, w: 2.2, h: 0.75, d: 1.8 }],
+      ['shrub_a', { x: 9.5, y: 0, z: -8.5, w: 1.6, h: 1.0, d: 1.6 }],
+    ] as [string, Placement][]) {
+      const o = placeModel(m, pl);
+      if (o) { g.add(o); if (m !== 'shrub_a') p.addBox(pl.x - pl.w / 2, 0, pl.z - pl.d / 2, pl.x + pl.w / 2, pl.h, pl.z + pl.d / 2); }
+    }
     // Family car in the driveway
     const car = makeCar('#b23a3a');
     car.position.set(9.3, 0, 6.5);

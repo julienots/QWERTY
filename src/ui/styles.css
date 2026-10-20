@@ -22,6 +22,15 @@ button { font-family: inherit; }
 /* ------------------------------------------------------------ screens */
 .screen { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 #loading { background: #000; gap: 16px; color: var(--muted); }
+.studio-logo.small { width: min(220px, 50vw); }
+.progress { width: min(320px, 70vw); height: 6px; border-radius: 3px; background: #222; overflow: hidden; }
+.progress-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), #fff3a8); transition: width 0.2s; }
+.progress-label { font-size: 13px; margin: 0; }
+.choose h2 { margin: 0 0 6px; color: var(--accent); letter-spacing: 0.08em; }
+.body-cards { display: flex; gap: 12px; margin: 16px 0 10px; }
+.body-cards button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 20px 12px; }
+.body-cards .ic { font-size: 34px; color: var(--accent); }
+.modal-box button.link { background: none; border: none; color: var(--muted); padding: 8px; }
 .spinner { width: 42px; height: 42px; border-radius: 50%; border: 3px solid #222; border-top-color: var(--accent); animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .title { background: #000; overflow: hidden; padding: 24px; text-align: center; }

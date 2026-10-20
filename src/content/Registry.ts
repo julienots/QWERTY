@@ -1,4 +1,4 @@
-import type { ContentPack, EnemyDef, MissionDef, PowerDef, SkinDef } from './types';
+import type { ContentPack, EnemyDef, MissionDef, PowerDef, ShipDef, SkinDef } from './types';
 import { validatePack } from './validate';
 
 export interface RegisteredPack {
@@ -12,6 +12,7 @@ export class ContentRegistry {
   readonly enemies = new Map<string, EnemyDef>();
   readonly missions = new Map<string, MissionDef>();
   readonly skins = new Map<string, SkinDef>();
+  readonly ships = new Map<string, ShipDef>();
   readonly packs = new Map<string, RegisteredPack>();
   /** Which pack declared each content id (used for diagnostics and save compatibility). */
   readonly origin = new Map<string, string>();
@@ -32,6 +33,7 @@ export class ContentRegistry {
     check('enemy', this.enemies, pack.enemies);
     check('mission', this.missions, pack.missions);
     check('skin', this.skins, pack.skins);
+    check('ship', this.ships, pack.ships);
     if (errors.length) return { ok: false, errors };
 
     // All-or-nothing registration: nothing is added if any check failed above.
@@ -45,6 +47,7 @@ export class ContentRegistry {
     add('enemy', this.enemies, pack.enemies);
     add('mission', this.missions, pack.missions);
     add('skin', this.skins, pack.skins);
+    add('ship', this.ships, pack.ships);
     this.packs.set(pack.id, { pack, source });
     return { ok: true, errors: [] };
   }

@@ -1,0 +1,10 @@
+{
+  "appId": "com.superessence.universeascendant",
+  "appName": "Universe Ascendant",
+  "webDir": "dist",
+  "android": {
+    "backgroundColor": "#000000",
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": false
+  }
+}

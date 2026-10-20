@@ -4,7 +4,7 @@
  * previous valid save; a corrupted save falls back to that backup.
  */
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 export type GameMode = 'survival' | 'creative';
 
@@ -25,6 +25,9 @@ export interface SaveData {
     fragments: number;
     skin: string;
     flying: boolean;
+    oxygen: number;
+    /** Chosen human body ('human_male' | 'human_female'); optional for older saves. */
+    body?: string;
   };
   powers: {
     unlocked: string[];
@@ -45,6 +48,13 @@ export interface SaveData {
     weather: string;
     discovered: string[];
     house: { lightsOn: string[]; doorsOpen: string[] };
+  };
+  ships: {
+    owned: string[];
+    current: string | null;
+    /** Where the player's ship is parked (null: at its default pad). */
+    parked: { zone: string; position: [number, number, number]; yaw: number; hull: number } | null;
+    piloting: boolean;
   };
   mods: { active: { id: string; version: string }[] };
 }
@@ -81,11 +91,13 @@ export function newSave(mode: GameMode): SaveData {
       fragments: 0,
       skin: 'citizen',
       flying: false,
+      oxygen: 100,
     },
     powers: { unlocked: [], favorites: [], active: null, levels: {} },
     inventory: {},
     missions: { completed: [], active: mode === 'creative' ? [] : ['m_morning'], progress: {}, counters: {} },
     world: { time: 7.2, day: 1, weather: 'clear', discovered: ['earth'], house: { lightsOn: ['bedroom'], doorsOpen: [] } },
+    ships: { owned: [], current: null, parked: null, piloting: false },
     mods: { active: [] },
   };
 }
@@ -101,6 +113,13 @@ const MIGRATIONS: Record<number, (d: any) => any> = {
     d.missions.progress = d.missions.progress ?? {};
     if (d.player) d.player.fragments = d.player.fragments ?? 0;
     d.version = 2;
+    return d;
+  },
+  // v2 had no ships and no oxygen.
+  2: (d) => {
+    d.ships = d.ships ?? { owned: [], current: null, parked: null, piloting: false };
+    if (d.player) d.player.oxygen = d.player.oxygen ?? 100;
+    d.version = 3;
     return d;
   },
 };
@@ -142,6 +161,10 @@ export function validateSave(d: any): string[] {
   const w = d.world;
   if (!w || !isFiniteNum(w.time) || !w.house || !isStrArr(w.house.lightsOn) || !isStrArr(w.house.doorsOpen)) e.push('monde invalide');
   if (!d.mods || !Array.isArray(d.mods.active)) e.push('mods invalides');
+  const s = d.ships;
+  if (!s || !isStrArr(s.owned) || (s.current !== null && typeof s.current !== 'string') || typeof s.piloting !== 'boolean') e.push('vaisseaux invalides');
+  else if (s.parked !== null && (!s.parked || typeof s.parked.zone !== 'string' || !Array.isArray(s.parked.position) || !s.parked.position.every(isFiniteNum))) e.push('vaisseau garé invalide');
+  if (p && !isFiniteNum(p.oxygen)) e.push('oxygène invalide');
   return e;
 }
 

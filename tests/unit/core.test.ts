@@ -155,6 +155,24 @@ describe('SaveSystem', () => {
     expect(m.version).toBe(SAVE_VERSION);
     expect(m.missions.active).toEqual(['m_lights']);
     expect(validateSave(m)).toEqual([]);
+    expect(m.ships.owned).toEqual([]);
+    expect(m.player.oxygen).toBe(100);
+  });
+
+  it('migrates a v2 save to v3 (ships, oxygen)', () => {
+    const v2: any = newSave('survival');
+    v2.version = 2;
+    delete v2.ships;
+    delete v2.player.oxygen;
+    const m = migrate(JSON.parse(JSON.stringify(v2)));
+    expect(m.version).toBe(3);
+    expect(validateSave(m)).toEqual([]);
+  });
+
+  it('rejects a corrupted parked ship', () => {
+    const d: any = newSave('survival');
+    d.ships.parked = { zone: 'orbit', position: [0, 'x', 0], yaw: 0, hull: 1 };
+    expect(validateSave(d).length).toBeGreaterThan(0);
   });
 
   it('reports a missing save', () => {

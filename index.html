@@ -9,7 +9,7 @@
   </head>
   <body>
     <div id="app"></div>
-    <div id="loading" class="screen"><div class="spinner"></div><p>Chargement de l'univers…</p></div>
+    <div id="loading" class="screen"><img class="studio-logo small" src="./superessence-logo.jpg" alt="" /><div class="progress"><div class="progress-fill"></div></div><p class="progress-label">Chargement de l'univers…</p></div>
     <div id="title" class="screen title hidden">
       <div class="title-bg"></div>
       <img class="studio-logo" src="./superessence-logo.jpg" alt="SuperEssence Studio" />
@@ -29,6 +29,17 @@
           <button data-action="cancel">Annuler</button>
           <button data-action="confirm" data-testid="confirm-new" class="danger">Nouvelle partie</button>
         </div>
+      </div>
+    </div>
+    <div id="choose-body" class="screen modal hidden">
+      <div class="modal-box choose">
+        <h2>Qui es-tu ?</h2>
+        <p class="muted">Ton apparence humaine au début de l'aventure. Les armures et combinaisons se débloquent ensuite.</p>
+        <div class="body-cards">
+          <button data-body="human_male" data-testid="body-male"><span class="ic">♂</span>Personnage masculin</button>
+          <button data-body="human_female" data-testid="body-female"><span class="ic">♀</span>Personnage féminin</button>
+        </div>
+        <button data-action="cancel-body" class="link">Annuler</button>
       </div>
     </div>
     <div id="fatal" class="screen modal hidden"><div class="modal-box"><p>Une erreur empêche le jeu de démarrer :</p><pre></pre></div></div>

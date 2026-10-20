@@ -7,8 +7,9 @@ page.on('pageerror', (e) => errors.push('pageerror: ' + e.stack));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 await page.addInitScript(() => localStorage.setItem('ua.settings', JSON.stringify({ autoQuality: false, quality: 'medium' })));
 await page.goto(url);
-await page.waitForSelector('#title:not(.hidden)');
+await page.waitForSelector('#title:not(.hidden)', { timeout: 180000 });
 await page.click('[data-testid=new-game]');
+await page.click('[data-testid=body-' + (process.argv[4] ?? 'male') + ']');
 await page.waitForTimeout(1500);
 const shot = async (name, setup) => {
   await page.evaluate(setup);

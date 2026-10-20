@@ -1,4 +1,4 @@
-import type { ContentPack, EnemyDef, MissionDef, PowerDef, SkinDef } from './types';
+import type { ContentPack, EnemyDef, MissionDef, PowerDef, ShipDef, SkinDef } from './types';
 import { GAME_CONTENT_API } from './types';
 
 /**
@@ -110,11 +110,14 @@ export function validateMission(m: MissionDef, errors: string[], where: string):
         case 'waves': if (!isNum(o.waves) || o.waves < 1 || o.waves > 50 || !Array.isArray(o.enemies) || o.enemies.length === 0) errors.push(`${w}: vagues invalides`); break;
         case 'altitude': if (!isNum(o.value)) errors.push(`${w}: altitude invalide`); break;
         case 'usePower': if (!str(o.power, 48) || !isNum(o.count)) errors.push(`${w}: usePower invalide`); break;
+        case 'zone': if (!str(o.zone, 48)) errors.push(`${w}: zone invalide`); break;
+        case 'board': break;
         default: errors.push(`${w}: type inconnu "${o?.type}"`);
       }
     });
   }
   if (!m.rewards || !isNum(m.rewards.xp) || m.rewards.xp < 0) errors.push(`${where}: récompense invalide`);
+  if (m.rewards?.ships !== undefined && (!Array.isArray(m.rewards.ships) || !m.rewards.ships.every((x) => typeof x === 'string'))) errors.push(`${where}: ships invalide`);
   if (m.rewards?.stage !== undefined && (!isNum(m.rewards.stage) || m.rewards.stage < 0 || m.rewards.stage > 5)) errors.push(`${where}: stage invalide`);
 }
 
@@ -125,6 +128,24 @@ export function validateSkin(s: SkinDef, errors: string[], where: string): void 
     if (!COLOR_RE.test(s[k] ?? '')) errors.push(`${where}: couleur ${k} invalide`);
   }
   if (!isNum(s.unlockStage) || s.unlockStage < 0 || s.unlockStage > 5) errors.push(`${where}: unlockStage invalide`);
+  if (s.model !== undefined && s.model !== 'base' && s.model !== 'suit') errors.push(`${where}: model invalide`);
+}
+
+export function validateShip(s: ShipDef, errors: string[], where: string): void {
+  if (!s || !str(s.id) || !ID_RE.test(s.id)) { errors.push(`${where}: id invalide`); return; }
+  if (!str(s.name, 60) || !str(s.description, 400)) errors.push(`${where}: nom/description manquant`);
+  if (!['scout', 'explorer', 'fighter', 'transport', 'alien', 'titan'].includes(s.shipClass)) errors.push(`${where}: classe inconnue`);
+  if (!['scout', 'fighter', 'explorer', 'alien'].includes(s.model)) errors.push(`${where}: modèle inconnu`);
+  if (!COLOR_RE.test(s.color ?? '') || !COLOR_RE.test(s.accent ?? '')) errors.push(`${where}: couleurs invalides`);
+  const nums: [keyof ShipDef, number, number][] = [
+    ['maxSpeed', 10, 5000], ['boost', 1, 10], ['accel', 1, 2000], ['turnRate', 0.1, 10], ['hull', 1, 1e6],
+    ['energy', 1, 1e5], ['weaponDamage', 0, 1e5], ['weaponRate', 0.1, 30], ['unlockStage', 0, 5],
+  ];
+  for (const [k, min, max] of nums) {
+    const val = s[k] as unknown;
+    if (!isNum(val) || val < min || val > max) errors.push(`${where}: ${String(k)} hors limites`);
+  }
+  if (typeof s.canWarp !== 'boolean') errors.push(`${where}: canWarp doit être booléen`);
 }
 
 export function validatePack(pack: ContentPack): ValidationResult {
@@ -134,7 +155,7 @@ export function validatePack(pack: ContentPack): ValidationResult {
   if (!str(pack.name, 80)) errors.push('pack: nom manquant');
   if (!str(pack.version, 20) || !/^\d+\.\d+\.\d+$/.test(pack.version)) errors.push('pack: version doit être de la forme 1.2.3');
   if (pack.gameApi !== GAME_CONTENT_API) errors.push(`pack: gameApi ${pack.gameApi} incompatible (attendu ${GAME_CONTENT_API})`);
-  const lists: [string, unknown][] = [['powers', pack.powers], ['enemies', pack.enemies], ['missions', pack.missions], ['skins', pack.skins]];
+  const lists: [string, unknown][] = [['powers', pack.powers], ['enemies', pack.enemies], ['missions', pack.missions], ['skins', pack.skins], ['ships', pack.ships]];
   for (const [name, list] of lists) {
     if (list !== undefined && (!Array.isArray(list) || list.length > 500)) errors.push(`pack: ${name} doit être une liste`);
   }
@@ -142,6 +163,7 @@ export function validatePack(pack: ContentPack): ValidationResult {
   pack.enemies?.forEach((e, i) => validateEnemy(e, errors, `enemies[${i}]`));
   pack.missions?.forEach((m, i) => validateMission(m, errors, `missions[${i}]`));
   pack.skins?.forEach((s, i) => validateSkin(s, errors, `skins[${i}]`));
+  pack.ships?.forEach((s, i) => validateShip(s, errors, `ships[${i}]`));
   const seen = new Set<string>();
   for (const p of pack.powers ?? []) {
     if (seen.has(p.id)) errors.push(`pack: id de pouvoir dupliqué "${p.id}"`);

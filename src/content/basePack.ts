@@ -69,7 +69,25 @@ export const BASE_PACK: ContentPack = {
     ], rewards: { xp: 700, powers: ['lightning_arc', 'super_speed'], fragments: 40 } },
     { id: 'm_beyond', title: 'Au-delà du ciel', requires: 'm_brute', description: "La brèche venait d'en haut. Monte aussi haut que tu le peux.", main: true, objectives: [
       { type: 'altitude', value: 400, text: "Voler jusqu'à 400 m d'altitude" },
-    ], rewards: { xp: 800, stage: 3, powers: ['star_breath', 'blink', 'shockwave', 'titan_strength'], fragments: 50 } },
+    ], rewards: { xp: 800, stage: 3, powers: ['blink', 'shockwave', 'titan_strength'], fragments: 50, ships: ['eclaireur'] } },
+    { id: 'm_ship', title: "Le vaisseau de l'Observatoire", requires: 'm_beyond', description: "L'Observatoire de Val-Lumen cachait un prototype de vaisseau. Il est à toi : direction l'orbite.", main: true, objectives: [
+      { type: 'reach', zone: 'earth', x: -150, z: 110, radius: 16, text: "Rejoindre la piste de l'Observatoire" },
+      { type: 'board', text: "Monter à bord de l'Éclaireur" },
+      { type: 'zone', zone: 'orbit', text: "Quitter l'atmosphère (monter au-delà de 2 500 m)" },
+    ], rewards: { xp: 400, fragments: 20 } },
+    { id: 'm_station', title: 'Station Aurore', requires: 'm_ship', description: "Une station internationale orbite au-dessus de la Terre. Son équipage a détecté l'origine de la brèche.", main: true, objectives: [
+      { type: 'reach', zone: 'orbit', x: 62, y: -2, z: 0, radius: 18, text: "S'approcher du sas de la Station Aurore" },
+      { type: 'interact', target: 'commander', text: 'Parler à la commandante Ilyana Varga' },
+    ], rewards: { xp: 400, fragments: 40, ships: ['faucon', 'pelerin'] } },
+    { id: 'm_moon', title: 'Premiers pas sur la Lune', requires: 'm_station', description: "Un signal ancien provient de la face visible de la Lune. Pose-toi et trouves-en la source.", main: true, objectives: [
+      { type: 'zone', zone: 'moon', text: 'Se poser sur la Lune (navigation : touche Carte ou terminal du vaisseau)' },
+      { type: 'reach', zone: 'moon', x: 260, z: -190, radius: 22, text: 'Explorer les ruines anciennes' },
+      { type: 'interact', target: 'monolith', text: 'Toucher le monolithe' },
+    ], rewards: { xp: 1200, stage: 4, powers: ['star_breath', 'gravity_well', 'time_slow', 'plasma_lance'], fragments: 80 } },
+    { id: 'm_home', title: 'Retour à Val-Lumen', requires: 'm_moon', description: "Le monolithe t'a montré l'ampleur de la menace. Rentre préparer la défense de la Terre.", main: true, objectives: [
+      { type: 'zone', zone: 'earth', text: 'Rentrer sur Terre' },
+      { type: 'reach', zone: 'earth', x: 0, z: 2, radius: 12, text: 'Rentrer à la maison' },
+    ], rewards: { xp: 500, fragments: 30 } },
     { id: 's_hunter', title: "Chasseur d'ombres", requires: 'm_echoes', description: 'Des créatures du Néant rôdent la nuit. Élimine-en quinze.', main: false, objectives: [
       { type: 'kill', enemy: '*', count: 15, text: 'Éliminer des créatures du Néant' },
     ], rewards: { xp: 250, fragments: 25 } },
@@ -77,12 +95,17 @@ export const BASE_PACK: ContentPack = {
       { type: 'usePower', power: 'essence_bolt', count: 25, text: "Utiliser le Trait d'Essence" },
     ], rewards: { xp: 150, fragments: 15 } },
   ],
+  ships: [
+    { id: 'eclaireur', name: 'Éclaireur', description: "Prototype léger de l'Observatoire. Rapide, agile, équipé d'un moteur de distorsion expérimental.", shipClass: 'scout', model: 'scout', color: '#e8ecf2', accent: '#ffd23f', maxSpeed: 320, boost: 2.5, accel: 140, turnRate: 1.9, hull: 300, energy: 200, canWarp: true, weaponDamage: 18, weaponRate: 6, unlockStage: 3 },
+    { id: 'faucon', name: 'Faucon', description: 'Chasseur de défense orbitale de la Station Aurore. Blindé et lourdement armé.', shipClass: 'fighter', model: 'fighter', color: '#3a4452', accent: '#ff4d6d', maxSpeed: 420, boost: 2.2, accel: 190, turnRate: 2.4, hull: 450, energy: 160, canWarp: true, weaponDamage: 32, weaponRate: 8, unlockStage: 3 },
+    { id: 'pelerin', name: 'Pèlerin', description: "Vaisseau d'exploration au long cours : énorme réserve d'énergie, coque renforcée.", shipClass: 'explorer', model: 'explorer', color: '#d8c9a8', accent: '#7fd8ff', maxSpeed: 260, boost: 3, accel: 90, turnRate: 1.3, hull: 700, energy: 400, canWarp: true, weaponDamage: 12, weaponRate: 4, unlockStage: 3 },
+  ],
   skins: [
     { id: 'citizen', name: 'Citoyen', skin: '#e0b48f', suit: '#3b5b8a', accent: '#d8d8d8', aura: '#7fd8ff', hair: '#3a2a20', unlockStage: 0 },
     { id: 'awakened', name: 'Éveillé', skin: '#e0b48f', suit: '#1f2a44', accent: '#7fd8ff', aura: '#7fd8ff', hair: '#3a2a20', unlockStage: 1 },
-    { id: 'guardian', name: 'Armure de Gardien', skin: '#e0b48f', suit: '#d9dde6', accent: '#ffcc33', aura: '#ffd23f', hair: '#3a2a20', unlockStage: 2 },
-    { id: 'astronaut', name: 'Combinaison spatiale', skin: '#e0b48f', suit: '#f2f2f2', accent: '#ff7a2f', aura: '#ffffff', hair: '#3a2a20', unlockStage: 3 },
-    { id: 'nebula', name: 'Voile de nébuleuse', skin: '#c7b3ff', suit: '#2b1650', accent: '#ff5cf0', aura: '#c45cff', hair: '#ff9cf0', unlockStage: 4 },
-    { id: 'cosmic_god', name: 'Divinité cosmique', skin: '#ffe9b0', suit: '#fff6dc', accent: '#ffcc33', aura: '#fff3a8', hair: '#ffffff', unlockStage: 5 },
+    { id: 'guardian', name: 'Armure de Gardien', skin: '#e0b48f', suit: '#d9dde6', accent: '#ffcc33', aura: '#ffd23f', hair: '#3a2a20', unlockStage: 2, model: 'suit' },
+    { id: 'astronaut', name: 'Combinaison spatiale', skin: '#e0b48f', suit: '#f2f2f2', accent: '#ff7a2f', aura: '#ffffff', hair: '#3a2a20', unlockStage: 3, model: 'suit' },
+    { id: 'nebula', name: 'Voile de nébuleuse', skin: '#c7b3ff', suit: '#2b1650', accent: '#ff5cf0', aura: '#c45cff', hair: '#ff9cf0', unlockStage: 4, model: 'suit' },
+    { id: 'cosmic_god', name: 'Divinité cosmique', skin: '#ffe9b0', suit: '#fff6dc', accent: '#ffcc33', aura: '#fff3a8', hair: '#ffffff', unlockStage: 5, model: 'suit' },
   ],
 };
