@@ -4,7 +4,8 @@ import type { Game } from '../Game';
 import type { Interactable } from './Zone';
 import type { EarthTerrain } from './Terrain';
 import { CRASH_SITE, POND, WATER_LEVEL } from './Terrain';
-import { batchStatic, block, boxGeo, mat } from './build';
+import { batchStatic, block, boxGeo, mat, placeModel, currentAssets } from './build';
+import { instanceModel, variantRoots, TreeField, type InstanceSpec } from './Instanced';
 import { facadeTexture, tex } from '../fx/textures';
 import { mulberry32 } from '../core/noise';
 
@@ -37,6 +38,7 @@ export class Town {
   private windowMats: THREE.MeshStandardMaterial[] = [];
   private lampMat!: THREE.MeshStandardMaterial;
   private poolMat!: THREE.MeshBasicMaterial;
+  private trees: TreeField | null = null;
   private shard!: THREE.Group;
   private shardLight!: THREE.PointLight;
   private shardDormant = false;
@@ -52,6 +54,7 @@ export class Town {
     this.buildWaterTower();
     this.buildCrashSite();
     this.buildTrees(treeCount);
+    this.buildProps();
     this.shard.userData.dynamic = true;
     batchStatic(this.group);
   }
@@ -111,6 +114,12 @@ export class Town {
     const n = this.lots.length;
     const rnd = mulberry32(77);
     const W = 10, D = 8, HH = 3;
+    for (const lot of this.lots) {
+      this.physics.addBox(lot.x - W / 2, 0, lot.z - D / 2, lot.x + W / 2, HH, lot.z + D / 2, 'house');
+      this.physics.addBox(lot.x - W / 2 - 0.5, HH, lot.z - D / 2 + 1, lot.x + W / 2 + 0.5, HH + 1.2, lot.z + D / 2 - 1, 'roof');
+      this.footprints.push([lot.x - W / 2 - 1, lot.z - D / 2 - 1, lot.x + W / 2 + 1, lot.z + D / 2 + 1]);
+    }
+    if (this.buildRealHouses(rnd)) return;
     const bodyGeo = boxGeo(W, HH, D, 2);
     bodyGeo.translate(0, HH / 2, 0);
     const bodies = new THREE.InstancedMesh(bodyGeo, new THREE.MeshStandardMaterial({ map: mat('#fff', { map: 'plaster' }).map, roughness: 0.9 }), n);
@@ -159,9 +168,6 @@ export class Town {
       const sq = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rot + Math.PI / 2, 0));
       m.compose(new THREE.Vector3(W / 2 + 0.03, 1.7, 0).applyQuaternion(q).add(new THREE.Vector3(lot.x, 0, lot.z)), sq, s);
       windows.setMatrixAt(i * 3 + 2, m);
-      this.physics.addBox(lot.x - W / 2, 0, lot.z - D / 2, lot.x + W / 2, HH, lot.z + D / 2, 'house');
-      this.physics.addBox(lot.x - W / 2 - 0.5, HH, lot.z - D / 2 + 1, lot.x + W / 2 + 0.5, HH + 1.2, lot.z + D / 2 - 1, 'roof');
-      this.footprints.push([lot.x - W / 2 - 1, lot.z - D / 2 - 1, lot.x + W / 2 + 1, lot.z + D / 2 + 1]);
     });
     for (const im of [bodies, roofs, doors, windows, garages]) {
       im.castShadow = true;
@@ -169,6 +175,45 @@ export class Town {
       im.computeBoundingSphere();
       this.group.add(im);
     }
+  }
+
+  /** Blender-modelled houses (3 designs), instanced per design, tinted per lot. */
+  private buildRealHouses(rnd: () => number): boolean {
+    const A = currentAssets();
+    const designs = ['house_a', 'house_b', 'house_c'].filter((h) => A?.has(h));
+    if (!designs.length) return false;
+    const wallColors = ['#fff4e2', '#e8f1f6', '#f9e3dc', '#eef5e4', '#fffaf0', '#f3e7d0'].map((c) => new THREE.Color(c));
+    const roofColors = ['#b8574a', '#7d828c', '#8a5a44', '#5d7488', '#a5483f'].map((c) => new THREE.Color(c));
+    const perDesign = new Map<string, InstanceSpec[]>(designs.map((d) => [d, []]));
+    const roofSpecs = new Map<string, InstanceSpec[]>(designs.map((d) => [d, []]));
+    for (const lot of this.lots) {
+      const d = designs[Math.floor(rnd() * designs.length)];
+      const spec = { x: lot.x, y: 0, z: lot.z, rotY: lot.facing === 1 ? 0 : Math.PI, scale: 1, color: wallColors[Math.floor(rnd() * wallColors.length)] };
+      perDesign.get(d)!.push(spec);
+      roofSpecs.get(d)!.push({ ...spec, color: roofColors[Math.floor(rnd() * roofColors.length)] });
+    }
+    for (const d of designs) {
+      const model = A!.model(d)!;
+      // walls tinted per house, roofs separately, everything else as authored
+      const walls = instanceModel(model, perDesign.get(d)!, { tintFilter: (m) => /pbr_(plaster|brick)/.test(m.name), recentre: false });
+      this.group.add(walls);
+      walls.traverse((o) => {
+        const im = o as THREE.InstancedMesh;
+        if (!im.isMesh) return;
+        const mm = im.material as THREE.MeshStandardMaterial;
+        if (mm.name === 'window_glass') {
+          mm.emissive.set('#ffcf8a');
+          mm.emissiveIntensity = 0;
+          if (!this.windowMats.includes(mm)) this.windowMats.push(mm);
+        }
+        if (mm.name === 'pbr_roof') {
+          const specs = roofSpecs.get(d)!;
+          specs.forEach((sp, i) => im.setColorAt(i, sp.color!));
+          if (im.instanceColor) im.instanceColor.needsUpdate = true;
+        }
+      });
+    }
+    return true;
   }
 
   private buildCommercial() {
@@ -203,6 +248,23 @@ export class Town {
     const pts: [number, number, number][] = [];
     for (let x = -165; x <= 165; x += 30) { pts.push([x, 11.7, 0]); pts.push([x + 15, 22.3, Math.PI]); }
     for (let z = -140; z <= 140; z += 32) { pts.push([-65.2, z, Math.PI / 2]); pts.push([65.2, z + 16, -Math.PI / 2]); }
+    this.lampMat = new THREE.MeshStandardMaterial({ color: '#fff7e0', emissive: '#ffd58a', emissiveIntensity: 0 });
+    const lampModel = currentAssets()?.model('street_lamp');
+    if (lampModel) {
+      // Real cast-iron lantern lamps + glowing bulbs at night
+      const h = 4.6;
+      const box = new THREE.Box3().setFromObject(lampModel);
+      const scale = h / Math.max(0.1, box.getSize(new THREE.Vector3()).y);
+      this.group.add(instanceModel(lampModel, pts.map(([x, z, r]) => ({ x, y: 0.15, z, rotY: r, scale }))));
+      const bulbs = new THREE.InstancedMesh(new THREE.SphereGeometry(0.16, 10, 8), this.lampMat, pts.length);
+      const mm = new THREE.Matrix4();
+      pts.forEach(([x, z], i) => { mm.makeTranslation(x, 0.15 + h * 0.86, z); bulbs.setMatrixAt(i, mm); });
+      bulbs.computeBoundingSphere();
+      this.group.add(bulbs);
+      for (const [x, z] of pts) this.physics.addBox(x - 0.15, 0, z - 0.15, x + 0.15, h, z + 0.15, 'lamp');
+      this.addLightPools(pts, 0);
+      return;
+    }
     const poleGeo = new THREE.CylinderGeometry(0.08, 0.12, 6, 8);
     poleGeo.translate(0, 3, 0);
     const armGeo = new THREE.BoxGeometry(0.08, 0.08, 1.4);
@@ -210,7 +272,6 @@ export class Town {
     const headGeo = new THREE.BoxGeometry(0.4, 0.15, 0.6);
     headGeo.translate(0, 5.95, 1.25);
     const poleMat = mat('#3a3d42', { metal: 0.7, rough: 0.4 });
-    this.lampMat = new THREE.MeshStandardMaterial({ color: '#fff7e0', emissive: '#ffd58a', emissiveIntensity: 0 });
     const poles = new THREE.InstancedMesh(poleGeo, poleMat, pts.length);
     const arms = new THREE.InstancedMesh(armGeo, poleMat, pts.length);
     const heads = new THREE.InstancedMesh(headGeo, this.lampMat, pts.length);
@@ -225,13 +286,18 @@ export class Town {
       this.physics.addBox(x - 0.15, 0, z - 0.15, x + 0.15, 6, z + 0.15, 'lamp');
     });
     for (const im of [poles, arms, heads]) { im.castShadow = true; im.computeBoundingSphere(); this.group.add(im); }
-    // Fake light pools under the lamps at night (no dynamic lights needed).
+    this.addLightPools(pts, 1.25);
+  }
+
+  /** Fake light pools under the lamps at night (no dynamic lights needed). */
+  private addLightPools(pts: [number, number, number][], reach: number) {
+    const m = new THREE.Matrix4();
     this.poolMat = new THREE.MeshBasicMaterial({ map: tex('glow'), color: '#ffcf8a', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
     const poolGeo = new THREE.PlaneGeometry(10, 10);
     poolGeo.rotateX(-Math.PI / 2);
     const pools = new THREE.InstancedMesh(poolGeo, this.poolMat, pts.length);
     pts.forEach(([x, z, r], i) => {
-      const fx = Math.sin(r) * 1.25, fz = Math.cos(r) * 1.25;
+      const fx = Math.sin(r) * reach, fz = Math.cos(r) * reach;
       m.compose(new THREE.Vector3(x + fx, 0.2, z + fz), new THREE.Quaternion(), new THREE.Vector3(1, 1, 1));
       pools.setMatrixAt(i, m);
     });
@@ -259,6 +325,12 @@ export class Town {
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * Math.PI * 2;
       const x = POND.x + Math.cos(a) * POND.rx * 1.48, z = POND.z + Math.sin(a) * POND.rz * 1.48;
+      const real = placeModel(i % 2 ? 'picnic_table' : 'street_bench', { x, y: 0, z, w: i % 2 ? 2.2 : 3.0, h: 0.95, d: i % 2 ? 1.8 : 0.8, rotY: Math.atan2(POND.x - x, POND.z - z) + Math.PI, align: false });
+      if (real) {
+        this.group.add(real);
+        this.physics.addBox(x - 0.9, 0, z - 0.9, x + 0.9, 0.5, z + 0.9, 'bench');
+        continue;
+      }
       const b = new THREE.Group();
       const seat = new THREE.Mesh(boxGeo(1.8, 0.08, 0.5), benchMat);
       seat.position.y = 0.45;
@@ -416,6 +488,19 @@ export class Town {
       if (y < 0.05 && Math.abs(x) > 150) continue;
       positions.push([x, y, z, 0.7 + rnd() * 0.7]);
     }
+    for (const [x, y, z, sc] of positions) {
+      if (Math.abs(x) < 330 && Math.abs(z) < 330) this.physics.addBox(x - 0.3 * sc, y - 1, z - 0.3 * sc, x + 0.3 * sc, y + 2.6 * sc, z + 0.3 * sc, 'tree');
+    }
+    // Real trees (Blender-generated, Poly Haven bark & leaves) with distance LOD
+    const field = new TreeField(positions.map(([x, y, z, sc], i) => ({
+      x, y: y - 0.15, z, rotY: rnd() * Math.PI * 2, kind: i % 3 === 0 ? 1 : 0, variant: i, scale: i % 3 === 0 ? sc * 0.85 : sc * 1.05,
+    })), [['tree_broadleaf', 'tree_broadleaf_lod'], ['tree_fir', 'tree_fir_lod']]);
+    if (field.ok) {
+      this.trees = field;
+      this.group.add(field.group);
+      field.update(0, new THREE.Vector3(0, 0, 0), true);
+      return;
+    }
     const trunkGeo = new THREE.CylinderGeometry(0.16, 0.26, 2.6, 7);
     trunkGeo.translate(0, 1.3, 0);
     const leafyGeo = new THREE.IcosahedronGeometry(1.9, 1);
@@ -435,7 +520,6 @@ export class Town {
       q.setFromEuler(new THREE.Euler(0, rnd() * Math.PI * 2, 0));
       m.compose(new THREE.Vector3(x, y - 0.1, z), q, new THREE.Vector3(s, s, s));
       trunks.setMatrixAt(i, m);
-      if (Math.abs(x) < 330 && Math.abs(z) < 330) this.physics.addBox(x - 0.3 * s, y - 1, z - 0.3 * s, x + 0.3 * s, y + 2.6 * s, z + 0.3 * s, 'tree');
     });
     leafy.forEach(([x, y, z, s], i) => {
       q.setFromEuler(new THREE.Euler(0, rnd() * 6, 0));
@@ -456,7 +540,83 @@ export class Town {
     }
   }
 
+  /** Street furniture and nature props (real models; skipped when not loaded). */
+  private buildProps() {
+    const rnd = mulberry32(4242);
+    // Only these files contain several distinct variants side by side.
+    const MULTI = new Set(['fire_hydrant', 'aircon', 'shrub_a', 'shrub_b', 'fern', 'mossy_rocks']);
+    const put = (name: string, specs: InstanceSpec[], collide?: [number, number, number]) => {
+      const whole = currentAssets()?.model(name);
+      const roots = MULTI.has(name) ? variantRoots(name) : whole ? [whole] : [];
+      if (!roots.length) return;
+      roots.forEach((root, v) => {
+        const mine = specs.filter((_, i) => i % roots.length === v);
+        if (!mine.length) return;
+        const g = instanceModel(root, mine);
+        this.group.add(g);
+      });
+      if (collide) for (const sp of specs) this.physics.addBox(sp.x - collide[0], sp.y, sp.z - collide[2], sp.x + collide[0], sp.y + collide[1], sp.z + collide[2], 'prop');
+    };
+    const fit = (name: string, height: number) => {
+      const r = MULTI.has(name) ? variantRoots(name)[0] : currentAssets()?.model(name);
+      if (!r) return 1;
+      return height / Math.max(0.05, new THREE.Box3().setFromObject(r).getSize(new THREE.Vector3()).y);
+    };
+    // Fire hydrants along the main street sidewalks
+    const hs = fit('fire_hydrant', 0.8);
+    put('fire_hydrant', [-150, -105, -50, 30, 75, 125].map((x, i) => ({ x, y: 0.15, z: i % 2 ? 22.0 : 12.0, rotY: rnd() * 6, scale: hs })), [0.25, 0.8, 0.25]);
+    // Utility boxes near intersections
+    const us = fit('utility_box', 1.1);
+    put('utility_box', [[-66, 24], [66, 10], [-66, -68], [66, -82]].map(([x, z]) => ({ x, y: 0.15, z, rotY: Math.PI / 2, scale: us })), [0.3, 1.1, 0.3]);
+    // Dumpsters behind the commercial buildings
+    const ds = fit('dumpster', 1.3);
+    put('dumpster', [[-40, -46], [22, -46], [-100, 70], [100, 70]].map(([x, z]) => ({ x, y: 0, z, rotY: 0, scale: ds })), [0.95, 1.3, 0.5]);
+    // Air-conditioning units on building roofs
+    const as = fit('aircon', 0.9);
+    put('aircon', [[-36, -38, 18], [-14, -36, 12], [26, -34, 26], [46, -36, 14]].map(([x, z, y]) => ({ x, y, z, rotY: 0, scale: as })));
+    // Police barriers around the crash site
+    const bs = fit('road_barrier', 0.85);
+    const barriers: InstanceSpec[] = [];
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * Math.PI * 2;
+      const x = CRASH_SITE.x + Math.cos(a) * 26, z = CRASH_SITE.z + Math.sin(a) * 26;
+      barriers.push({ x, y: this.terrain.heightAt(x, z), z, rotY: -a, scale: bs });
+    }
+    put('road_barrier', barriers, [0.6, 0.85, 0.6]);
+    // Shrubs along front yards and in the park, ferns and rocks on the hills
+    const shrubs: InstanceSpec[] = [];
+    for (const lot of this.lots) {
+      for (const dx of [-4.2, 4.2]) shrubs.push({ x: lot.x + dx, y: 0, z: lot.z + lot.facing * 5.2, rotY: rnd() * 6, scale: 0.9 + rnd() * 0.4 });
+    }
+    for (let i = 0; i < 24; i++) {
+      const a = rnd() * Math.PI * 2, r = 1.7 + rnd() * 0.6;
+      shrubs.push({ x: POND.x + Math.cos(a) * POND.rx * r, y: 0, z: POND.z + Math.sin(a) * POND.rz * r, rotY: rnd() * 6, scale: 0.8 + rnd() * 0.6 });
+    }
+    put('shrub_b', shrubs.filter((_, i) => i % 2 === 0));
+    put('shrub_a', shrubs.filter((_, i) => i % 2 === 1));
+    const wild = (n: number, minR: number, maxR: number) => {
+      const out: InstanceSpec[] = [];
+      let guard = 0;
+      while (out.length < n && guard++ < n * 20) {
+        const a = rnd() * Math.PI * 2, r = minR + rnd() * (maxR - minR);
+        const x = Math.cos(a) * r, z = Math.sin(a) * r;
+        if (Math.max(Math.abs(x), Math.abs(z)) < 160 || onRoad(x, z, 3)) continue;
+        out.push({ x, y: this.terrain.heightAt(x, z) - 0.1, z, rotY: rnd() * 6, scale: 0.7 + rnd() * 0.8 });
+      }
+      return out;
+    };
+    put('fern', wild(60, 170, 300));
+    put('mossy_rocks', wild(26, 180, 310).map((s2) => ({ ...s2, scale: s2.scale * 0.35 })));
+    const boulders = wild(14, 190, 310).map((s2) => ({ ...s2, scale: s2.scale * 1.3 }));
+    put('boulder', boulders, [0.9, 1.6, 0.9]);
+    put('tree_stump', wild(12, 170, 280).map((s2) => ({ ...s2, scale: s2.scale * 0.8 })));
+    // A covered car parked in a neighbour's driveway, a gnome or two
+    const cc = placeModel('covered_car', { x: 46.5, y: 0, z: 9.5, w: 1.9, h: 1.5, d: 4.4 });
+    if (cc) { this.group.add(cc); this.physics.addBox(45.5, 0, 7.3, 47.5, 1.5, 11.7, 'car'); }
+  }
+
   update(dt: number, game: Game, night: number) {
+    this.trees?.update(dt, game.camera.position);
     for (const wm of this.windowMats) wm.emissiveIntensity = night * 1.1;
     this.lampMat.emissiveIntensity = night * 3;
     this.poolMat.opacity = night * 0.55;
