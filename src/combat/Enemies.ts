@@ -189,7 +189,7 @@ export class EnemyManager {
         e.model.root.scale.setScalar(e.def.scale * s);
         if (e.deathT > 0.6) {
           this.group.remove(e.model.root);
-          e.model.root.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) m.geometry.dispose(); });
+          if (!e.model.root.userData.sharedGeometry) e.model.root.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) m.geometry.dispose(); });
           this.list.splice(i, 1);
         }
         continue;

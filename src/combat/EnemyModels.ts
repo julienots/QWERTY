@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { EnemyDef } from '../content/types';
+import { currentAssets } from '../world/build';
 
 export interface EnemyAnimState {
   speed: number;
@@ -41,6 +42,12 @@ class Base {
       if (c) { m.emissive.copy(c); m.emissiveIntensity = 0.6; }
       else { m.emissive.copy(this.baseEmissive[i]); m.emissiveIntensity = this.baseIntensity[i]; }
     });
+  }
+  /** Registers an existing (cloned) material so flashes and tints apply to it. */
+  protected adopt(m: THREE.MeshStandardMaterial) {
+    this.mats.push(m);
+    this.baseEmissive.push(m.emissive.clone());
+    this.baseIntensity.push(m.emissiveIntensity);
   }
   protected mesh(geo: THREE.BufferGeometry, m: THREE.Material, parent: THREE.Object3D = this.root) {
     const x = new THREE.Mesh(geo, m);
@@ -255,9 +262,105 @@ class Drone extends Base implements EnemyModel {
   }
 }
 
+type CreatureKind = 'stalker' | 'spitter' | 'brute' | 'drone';
+const METRICS: Record<CreatureKind, { center: number; radius: number }> = {
+  stalker: { center: 0.85, radius: 0.8 }, spitter: { center: 1.0, radius: 0.8 }, brute: { center: 1.3, radius: 1.0 }, drone: { center: 0, radius: 0.7 },
+};
+
+/**
+ * Creature modelled in Blender (tools/blender/creatures.py): sculpted, displaced and
+ * cavity-baked meshes in a hierarchy of named, pivoted parts animated procedurally.
+ * Hide and glow colours come from the enemy definition, so mods can recolour them.
+ */
+class GltfCreature extends Base implements EnemyModel {
+  center: number;
+  radius: number;
+  private n = new Map<string, THREE.Object3D>();
+  private rest = new Map<string, { p: THREE.Vector3; r: THREE.Euler; s: THREE.Vector3 }>();
+  constructor(def: EnemyDef, private kind: CreatureKind, scene: THREE.Object3D) {
+    super();
+    this.center = METRICS[kind].center;
+    this.radius = METRICS[kind].radius;
+    const clones = new Map<THREE.Material, THREE.MeshStandardMaterial>();
+    scene.traverse((o) => {
+      if (o.name) { this.n.set(o.name, o); this.rest.set(o.name, { p: o.position.clone(), r: o.rotation.clone(), s: o.scale.clone() }); }
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      m.castShadow = true;
+      const src = m.material as THREE.MeshStandardMaterial;
+      let c = clones.get(src);
+      if (!c) {
+        c = src.clone();
+        if (src.name === 'hide') c.color.set(def.color).multiplyScalar(1.6);
+        else { c.emissive.set(def.glow); if (src.name === 'glow') c.color.set(def.glow); }
+        clones.set(src, c);
+        this.adopt(c);
+      }
+      m.material = c;
+    });
+    this.root.add(scene);
+    this.root.userData.sharedGeometry = true;
+  }
+  private node(name: string) { return this.n.get(name); }
+  private pose(name: string, rx = 0, ry = 0, rz = 0, dy = 0) {
+    const o = this.n.get(name), r = this.rest.get(name);
+    if (!o || !r) return;
+    o.rotation.set(r.r.x + rx, r.r.y + ry, r.r.z + rz);
+    o.position.y = r.p.y + dy;
+  }
+  animate(_dt: number, s: EnemyAnimState) {
+    switch (this.kind) {
+      case 'stalker': {
+        const f = s.t * (4 + s.speed * 1.6);
+        const amp = Math.min(1, s.speed / 3) * 0.7;
+        for (const [leg, ph] of [['fl', 0], ['fr', Math.PI], ['bl', Math.PI], ['br', 0]] as [string, number][]) {
+          const w = Math.sin(f + ph);
+          this.pose(`leg_${leg}_u`, w * amp);
+          this.pose(`leg_${leg}_l`, Math.max(0, -w) * amp * 0.9);
+        }
+        this.pose('body', s.attack * 0.2, 0, Math.sin(f * 0.5) * 0.04 * amp, Math.abs(Math.sin(f)) * 0.06 * amp - s.attack * 0.15);
+        this.pose('head', s.attack * 0.35 + Math.sin(s.t * 2) * 0.05, Math.sin(s.t * 0.7) * 0.15 * (1 - amp));
+        this.pose('jaw', s.attack * 0.75 + Math.max(0, Math.sin(s.t * 1.3)) * 0.08);
+        for (let i = 0; i < 4; i++) this.pose(`tail_${i}`, 0, Math.sin(s.t * 3 - i) * 0.3);
+        break;
+      }
+      case 'spitter': {
+        const f = s.t * (3 + s.speed * 2);
+        const sw = Math.sin(f) * 0.5 * Math.min(1, s.speed);
+        this.pose('leg_l', sw);
+        this.pose('leg_r', -sw);
+        this.pose('body', -s.attack * 0.35, 0, 0, Math.abs(Math.sin(f)) * 0.05);
+        const sac = this.node('sac');
+        if (sac) sac.scale.copy(this.rest.get('sac')!.s).multiplyScalar(1 + Math.sin(s.t * 4) * 0.06 + s.attack * 0.35);
+        this.pose('mouth', -s.attack * 0.25);
+        break;
+      }
+      case 'brute': {
+        const f = s.t * (2 + s.speed * 1.2);
+        const amp = Math.min(1, s.speed / 2) * 0.5;
+        this.pose('leg_l', Math.sin(f) * amp);
+        this.pose('leg_r', -Math.sin(f) * amp);
+        this.pose('arm_l', -Math.sin(f) * amp * 0.6 - s.attack * 2.4);
+        this.pose('arm_r', Math.sin(f) * amp * 0.6 - s.attack * 2.4);
+        this.pose('torso', s.attack * 0.3, Math.sin(f) * 0.06 * amp, 0, Math.abs(Math.sin(f)) * 0.08 * amp);
+        this.pose('head', -s.attack * 0.3, Math.sin(s.t * 0.6) * 0.2);
+        break;
+      }
+      default: {
+        this.pose('ring', s.t * 2, s.t * 1.3);
+        const ring = this.node('ring');
+        if (ring) ring.scale.copy(this.rest.get('ring')!.s).multiplyScalar(1 + s.attack * 0.4);
+        this.pose('core', 0, s.t * 0.8, 0, Math.sin(s.t * 3) * 0.08);
+      }
+    }
+  }
+}
+
 export function createEnemyModel(def: EnemyDef): EnemyModel {
   let m: EnemyModel;
-  switch (def.model) {
+  const scene = currentAssets()?.model(`creature_${def.model}`);
+  if (scene && def.model in METRICS) m = new GltfCreature(def, def.model as CreatureKind, scene);
+  else switch (def.model) {
     case 'stalker': m = new Stalker(def); break;
     case 'spitter': m = new Spitter(def); break;
     case 'brute': m = new Brute(def); break;
