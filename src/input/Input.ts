@@ -30,6 +30,8 @@ export class Input {
   lookDY = 0;
   jumpHeld = false;
   private touchJump = false;
+  private touchDown = false;
+  private btnDown!: HTMLElement;
   descendHeld = false;
   run = false;
   private pressed = new Set<string>();
@@ -92,6 +94,14 @@ export class Input {
     this.btnAction = this.el('button', 'ctl-btn btn-action', cluster);
     this.btnJump = this.el('button', 'ctl-btn btn-jump', cluster);
     this.btnPower = this.el('button', 'ctl-btn btn-power', cluster);
+    // Descend (flight and ship only): held like the jump button.
+    this.btnDown = this.el('button', 'ctl-btn btn-down', cluster);
+    this.btnDown.dataset.testid = 'btn-down';
+    this.btnDown.innerHTML = '<span class="ic">⇩</span>';
+    this.btnDown.addEventListener('pointerdown', (e) => { e.stopPropagation(); this.markTouch(e); this.btnDown.setPointerCapture(e.pointerId); this.touchDown = true; this.btnDown.classList.add('down'); });
+    const downUp = () => { this.touchDown = false; this.btnDown.classList.remove('down'); };
+    this.btnDown.addEventListener('pointerup', downUp);
+    this.btnDown.addEventListener('pointercancel', downUp);
     this.powerRing = this.el('div', 'power-ring', this.btnPower);
     this.btnAction.dataset.testid = 'btn-action';
     this.btnJump.dataset.testid = 'btn-jump';
@@ -327,7 +337,7 @@ export class Input {
       this.run = k.has('ShiftLeft') || k.has('ShiftRight');
     }
     this.jumpHeld = this.keys.has('Space') || this.touchJump;
-    this.descendHeld = this.keys.has('KeyC') || this.keys.has('ControlLeft');
+    this.descendHeld = this.keys.has('KeyC') || this.keys.has('ControlLeft') || this.touchDown;
     this.updateHold();
   }
 
@@ -366,7 +376,7 @@ export class Input {
     this.root.classList.toggle('hidden', !v);
     (this.container.querySelector('.menu-btn') as HTMLElement | null)?.classList.toggle('hidden', !v);
     if (!v) {
-      this.moveX = 0; this.moveY = 0; this.jumpHeld = false; this.touchJump = false;
+      this.moveX = 0; this.moveY = 0; this.jumpHeld = false; this.touchJump = false; this.touchDown = false;
       this.joyPointer = null; this.joyBase.classList.remove('active');
       this.lookPointers.clear();
     }

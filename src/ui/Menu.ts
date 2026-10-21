@@ -4,11 +4,12 @@ import { STAGE_NAMES } from '../content/basePack';
 import type { PowerCategory } from '../content/types';
 import { QUALITY_ORDER, type Settings } from '../core/Settings';
 import { WEATHER_NAMES, type WeatherKind } from '../world/EarthSky';
+import { importMod, removeImportedMod, setModEnabled } from '../core/Mods';
 
-export type MenuTab = 'map' | 'powers' | 'skins' | 'missions' | 'creative' | 'settings' | 'system';
+export type MenuTab = 'map' | 'powers' | 'skins' | 'missions' | 'creative' | 'mods' | 'settings' | 'system';
 
 const TAB_LABELS: Record<MenuTab, string> = {
-  map: 'Carte', powers: 'Pouvoirs', skins: 'Tenues', missions: 'Missions', creative: 'Créatif', settings: 'Réglages', system: 'Partie',
+  map: 'Carte', powers: 'Pouvoirs', skins: 'Tenues', missions: 'Missions', creative: 'Créatif', mods: 'Mods', settings: 'Réglages', system: 'Partie',
 };
 
 const CATEGORY_LABELS: Record<PowerCategory, string> = {
@@ -42,7 +43,7 @@ export class Menu {
   private tabs(): MenuTab[] {
     const t: MenuTab[] = ['map', 'powers', 'skins', 'missions'];
     if (this.game.mode === 'creative') t.push('creative');
-    t.push('settings', 'system');
+    t.push('mods', 'settings', 'system');
     return t;
   }
 
@@ -84,6 +85,7 @@ export class Menu {
       case 'skins': this.renderSkins(); break;
       case 'missions': this.renderMissions(); break;
       case 'creative': this.renderCreative(); break;
+      case 'mods': this.renderMods(); break;
       case 'settings': this.renderSettings(); break;
       case 'system': this.renderSystem(); break;
     }
@@ -353,6 +355,58 @@ export class Menu {
     const input = row.querySelector('input')!;
     input.addEventListener('change', () => onChange(input.checked));
     return row;
+  }
+
+  // --------------------------------------------------------------------- mods
+  private renderMods() {
+    const g = this.game;
+    const storage = g.settingsStorage;
+    const intro = document.createElement('p');
+    intro.className = 'muted';
+    intro.textContent = 'Les mods sont des paquets de contenu (pouvoirs, créatures, missions, tenues, vaisseaux) au format JSON. Ils ne contiennent aucun code : chaque valeur est vérifiée avant chargement. Les changements s’appliquent au prochain démarrage.';
+    this.body.appendChild(intro);
+    let changed = false;
+    const restart = document.createElement('button');
+    restart.textContent = 'Redémarrer pour appliquer';
+    restart.className = 'hidden';
+    restart.dataset.testid = 'mods-restart';
+    restart.addEventListener('click', () => { g.saveGame(false); location.reload(); });
+    const markChanged = () => { changed = true; restart.classList.toggle('hidden', !changed); };
+    if (!g.modStatus.length) this.body.insertAdjacentHTML('beforeend', '<p class="muted">Aucun mod disponible.</p>');
+    for (const m of g.modStatus) {
+      const card = document.createElement('div');
+      card.className = 'mod-card';
+      const state = m.loaded ? '<span class="ok">actif</span>' : m.enabled ? '<span class="err">refusé</span>' : '<span class="muted">désactivé</span>';
+      card.innerHTML = `<div class="mod-head"><b>${escapeHtml(m.name)}</b> <small>v${escapeHtml(m.version)} · ${escapeHtml(m.author)} · ${m.origin === 'bundled' ? 'fourni avec le jeu' : 'importé'}</small> ${state}</div>
+        <p>${escapeHtml(m.description)}</p>${m.errors.length ? `<pre class="mod-errors">${escapeHtml(m.errors.slice(0, 6).join('\n'))}</pre>` : ''}`;
+      const row = document.createElement('div');
+      row.className = 'btn-row';
+      row.appendChild(this.checkbox('Activé', m.enabled, (v) => { setModEnabled(storage, m.id, v); m.enabled = v; markChanged(); }));
+      if (m.origin === 'imported') {
+        const del = document.createElement('button');
+        del.textContent = 'Supprimer';
+        del.addEventListener('click', () => { removeImportedMod(storage, m.id); card.remove(); markChanged(); });
+        row.appendChild(del);
+      }
+      card.appendChild(row);
+      this.body.appendChild(card);
+    }
+    const imp = document.createElement('label');
+    imp.className = 'file-btn';
+    imp.innerHTML = 'Importer un mod (.json)<input type="file" accept=".json,application/json" hidden data-testid="mod-import">';
+    const msg = document.createElement('p');
+    msg.className = 'muted';
+    imp.querySelector('input')!.addEventListener('change', async (e) => {
+      const f = (e.target as HTMLInputElement).files?.[0];
+      if (!f) return;
+      const r = importMod(storage, await f.text());
+      msg.textContent = r.ok ? `Mod « ${r.id} » importé et activé.` : `Mod refusé : ${r.errors.slice(0, 4).join(' ; ')}`;
+      if (r.ok) markChanged();
+    });
+    const row = document.createElement('div');
+    row.className = 'btn-row';
+    row.append(imp, restart);
+    this.body.append(row, msg);
   }
 
   private renderSettings() {

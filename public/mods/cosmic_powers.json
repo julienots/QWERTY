@@ -1,0 +1,32 @@
+{
+  "id": "cosmic_powers",
+  "name": "COSMIC POWERS",
+  "version": "1.0.0",
+  "author": "SuperEssence Studio",
+  "description": "Premier mod officiel : sept pouvoirs cosmiques, une nouvelle créature du Néant, une épreuve, une armure stellaire et le vaisseau Comète. Pur contenu de données, sans code.",
+  "gameApi": 1,
+  "dependencies": ["base"],
+  "powers": [
+    { "id": "comet_volley", "name": "Salve de comètes", "description": "Cinq comètes à tête chercheuse fondent sur tes ennemis.", "category": "cosmic", "element": "light", "icon": "☄", "color": "#9fd8ff", "energyCost": 28, "cooldown": 2.2, "unlockStage": 3, "sound": "zap", "behavior": { "type": "projectile", "speed": 50, "damage": 26, "radius": 0.3, "count": 5, "spread": 0.35, "homing": 4, "range": 140 }, "upgradeCosts": [15, 30, 60] },
+    { "id": "nebula_burst", "name": "Éclat de nébuleuse", "description": "Une déflagration de gaz stellaire brûle tout autour de toi.", "category": "cosmic", "element": "plasma", "icon": "✺", "color": "#ff7af0", "energyCost": 40, "cooldown": 5, "unlockStage": 3, "sound": "boom", "behavior": { "type": "nova", "radius": 12, "damage": 95, "knockback": 22 }, "upgradeCosts": [15, 30, 60] },
+    { "id": "solar_flare", "name": "Éruption solaire", "description": "Un jet de plasma solaire continu qui transperce les rangs ennemis.", "category": "elemental", "element": "fire", "icon": "☀", "color": "#ffb347", "energyCost": 45, "cooldown": 3.5, "unlockStage": 4, "sound": "fire", "behavior": { "type": "beam", "range": 70, "dps": 180, "width": 0.8, "duration": 1.4 }, "upgradeCosts": [20, 40, 80] },
+    { "id": "event_horizon", "name": "Horizon des événements", "description": "Un trou noir miniature engloutit tout dans un large rayon.", "category": "cosmic", "element": "gravity", "icon": "◉", "color": "#7b5cff", "energyCost": 70, "cooldown": 16, "unlockStage": 4, "sound": "warp", "behavior": { "type": "gravityWell", "radius": 18, "duration": 6, "pull": 26, "dps": 45 } },
+    { "id": "stellar_aegis", "name": "Égide stellaire", "description": "Une armure de lumière d'étoile absorbe d'énormes quantités de dégâts.", "category": "cosmic", "element": "light", "icon": "⛨", "color": "#fff3a8", "energyCost": 40, "cooldown": 18, "unlockStage": 4, "sound": "chime", "behavior": { "type": "shield", "duration": 8, "absorb": 400 } },
+    { "id": "warp_stride", "name": "Foulée de distorsion", "description": "Plie l'espace pour franchir de longues distances en un instant.", "category": "movement", "element": "none", "icon": "⇶", "color": "#9ff0ff", "energyCost": 25, "cooldown": 2.5, "unlockStage": 4, "sound": "warp", "behavior": { "type": "blink", "distance": 45 } },
+    { "id": "supernova", "name": "Supernova", "description": "Tu deviens une étoile mourante : une explosion cataclysmique balaie tout.", "category": "divine", "element": "light", "icon": "✹", "color": "#ffffff", "energyCost": 120, "cooldown": 40, "unlockStage": 5, "sound": "boom", "behavior": { "type": "nova", "radius": 40, "damage": 600, "knockback": 60 } }
+  ],
+  "enemies": [
+    { "id": "void_wraith", "name": "Spectre du Néant", "model": "drone", "color": "#1b1430", "glow": "#ff5cf0", "scale": 1.3, "health": 120, "speed": 9, "damage": 14, "attackRange": 26, "attackCooldown": 1.1, "aggroRange": 70, "ranged": true, "flying": true, "xp": 60, "fragments": 5, "fleeAt": 0 }
+  ],
+  "missions": [
+    { "id": "mod_cosmic_trial", "title": "Épreuve cosmique", "requires": "m_beyond", "description": "Des Spectres du Néant rôdent au-dessus des collines. Prouve que tu maîtrises les forces cosmiques.", "main": false, "objectives": [
+      { "type": "kill", "enemy": "void_wraith", "count": 5, "text": "Abattre les Spectres du Néant au-dessus des collines", "spawn": { "x": -120, "z": -220, "count": 5 } }
+    ], "rewards": { "xp": 900, "fragments": 60, "powers": ["comet_volley", "nebula_burst"], "ships": ["comete"] } }
+  ],
+  "skins": [
+    { "id": "stellar_knight", "name": "Chevalier stellaire", "skin": "#e0b48f", "suit": "#1c2440", "accent": "#9fd8ff", "aura": "#9fd8ff", "hair": "#e8e8e8", "unlockStage": 3, "model": "suit" }
+  ],
+  "ships": [
+    { "id": "comete", "name": "Comète", "description": "Intercepteur stellaire du mod COSMIC POWERS : le plus rapide de la flotte.", "shipClass": "scout", "model": "scout", "color": "#1c2440", "accent": "#9fd8ff", "maxSpeed": 480, "boost": 2.6, "accel": 220, "turnRate": 2.6, "hull": 280, "energy": 220, "canWarp": true, "weaponDamage": 26, "weaponRate": 9, "unlockStage": 3 }
+  ]
+}

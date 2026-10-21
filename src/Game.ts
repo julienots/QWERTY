@@ -37,6 +37,7 @@ import { ShipSystem } from './space/ShipSystem';
 import { OrbitZone, AIRLOCK } from './space/OrbitZone';
 import { StationZone } from './space/StationZone';
 import { MoonZone } from './space/MoonZone';
+import type { ModStatus } from './core/Mods';
 
 export type ZoneId = 'earth' | 'orbit' | 'station' | 'moon';
 /** How the player arrives in a zone. */
@@ -85,6 +86,8 @@ export class Game {
   timeSlowFx = 0;
   creativeHostile = false;
   readonly ships: ShipSystem;
+  /** Mods known at boot (shipped or imported) and whether they loaded. */
+  modStatus: ModStatus[] = [];
   /** True while a zone transition is running (fade). */
   traveling = false;
   private composer: EffectComposer | null = null;
@@ -157,6 +160,8 @@ export class Game {
   }
 
   private storage: KeyValueStorage;
+  /** Storage for settings and mod preferences. */
+  get settingsStorage(): KeyValueStorage { return this.storage; }
   dayEnvironment: THREE.Texture | null = null;
   /** Body chosen for a new game (character selection screen). */
   newGameBody: BodyKind = 'human_male';
@@ -289,6 +294,8 @@ export class Game {
     this.player.energy = Math.min(this.player.maxEnergy, d.player.energy);
     this.player.flying = d.player.flying && this.powers.hasPassive('flight');
     this.player.oxygen = d.player.oxygen ?? 100;
+    const missing = (d.mods?.active ?? []).filter((m) => !this.content.packs.has(m.id)).map((m) => m.id);
+    if (missing.length) setTimeout(() => this.hud.toast(`Mods absents de cette sauvegarde ignorés : ${missing.join(', ')}`), 1500);
     this.ships.load(d.ships);
     this.ships.placeInZone();
     this.cameraRig.snapBehind(d.player.yaw);
@@ -641,7 +648,8 @@ export class Game {
     else {
       // The Essence slowly adapts the body to the void; the space suit helps a lot.
       const suit = this.skinId === 'astronaut' || this.skinId === 'cosmic_god';
-      const rate = (suit ? 0.35 : 1) * (this.progress.stage >= 4 ? 0.5 : 1) * (this.progress.stage >= 5 ? 0 : 1);
+      const immune = this.progress.stage >= 5 || this.powers.hasPassive('spaceBreath');
+      const rate = immune ? 0 : (suit ? 0.35 : 1) * (this.progress.stage >= 4 ? 0.5 : 1);
       p.oxygen = Math.max(0, p.oxygen - dt * rate * 1.1);
       if (p.oxygen <= 0) {
         p.damage(6 * dt, this);

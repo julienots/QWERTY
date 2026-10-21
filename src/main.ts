@@ -4,6 +4,7 @@ import type { KeyValueStorage } from './core/SaveSystem';
 import { Assets } from './core/Assets';
 import type { BodyKind } from './player/CharacterModel';
 import { MemoryStorage } from './core/SaveSystem';
+import { discoverMods, enabledMods, registerMods } from './core/Mods';
 
 /** localStorage when available (it can throw in private modes); in-memory fallback otherwise. */
 function pickStorage(): KeyValueStorage {
@@ -48,8 +49,14 @@ async function boot() {
     fill.style.width = `${Math.round((100 * done) / total)}%`;
     label.textContent = `Chargement de l'univers… ${Math.round((100 * done) / total)} %`;
   });
-  const game = new Game(app, pickStorage(), assets);
+  const storage = pickStorage();
+  const game = new Game(app, storage, assets);
   (window as any).__UA = game;
+  // Content mods (validated data packs) are registered before any save is loaded.
+  const found = await discoverMods('./', storage);
+  game.modStatus = registerMods(game.content, found.mods, enabledMods(storage));
+  for (const e of found.errors) console.warn('[Mods]', e);
+  for (const m of game.modStatus) if (m.enabled && !m.loaded) console.warn(`[Mods] ${m.id} refusé :`, m.errors.join('; '));
 
   const btnContinue = title.querySelector<HTMLButtonElement>('[data-action="continue"]')!;
   const btnNew = title.querySelector<HTMLButtonElement>('[data-action="new"]')!;

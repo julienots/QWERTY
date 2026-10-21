@@ -31,7 +31,8 @@ async function test(name, fn) {
 }
 function assert(cond, msg) { if (!cond) throw new Error(msg); }
 
-const server = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], { stdio: 'pipe' });
+// Spawn vite itself (not through npx) so that server.kill() really stops it.
+const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'preview', '--port', String(PORT), '--strictPort'], { stdio: 'pipe' });
 await new Promise((resolve, reject) => {
   const to = setTimeout(() => reject(new Error('preview server did not start')), 20000);
   server.stdout.on('data', (d) => { if (String(d).includes(String(PORT))) { clearTimeout(to); resolve(); } });
@@ -45,6 +46,8 @@ const browser = await chromium.launch({
 async function openGame({ touch = false, clear = true, viewport = { width: 1280, height: 720 } } = {}) {
   const ctx = await browser.newContext({ viewport, hasTouch: touch, isMobile: touch, deviceScaleFactor: 1 });
   const page = await ctx.newPage();
+  // Asset loading and world building are slow on the software renderer (SwiftShader).
+  page.setDefaultTimeout(240000);
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -56,7 +59,7 @@ async function openGame({ touch = false, clear = true, viewport = { width: 1280,
     if (!localStorage.getItem('ua.settings')) localStorage.setItem('ua.settings', JSON.stringify({ autoQuality: false, quality: 'low' }));
   }, clear);
   await page.goto(URL);
-  await page.waitForSelector('#title:not(.hidden)', { timeout: 30000 });
+  await page.waitForSelector('#title:not(.hidden)');
   return { ctx, page, errors };
 }
 
@@ -88,6 +91,7 @@ await test('Écran titre et lancement sans erreur', async () => {
   assert(visible, 'bouton Nouvelle partie absent');
   assert(!(await page.isVisible('[data-testid=continue]')), 'Continuer ne doit pas apparaître sans sauvegarde');
   await page.click('[data-testid=new-game]');
+  await page.click('[data-testid=body-male]');
   await page.waitForFunction(() => window.__UA?.ready === true);
   await page.waitForTimeout(1500);
   await freeze(page);
@@ -322,6 +326,28 @@ await test('Menu : pause, onglets, changement de qualité persistant', async () 
   return 'pause OK, 6 onglets, qualité « medium » enregistrée';
 });
 
+await test('Mods : COSMIC POWERS chargé, onglet Mods, désactivation persistante', async () => {
+  const st = await page.evaluate(() => {
+    const g = window.__UA;
+    return { mods: g.modStatus.map((m) => [m.id, m.loaded]), supernova: !!g.content.power('supernova'), ship: g.content.ships.has('comete') };
+  });
+  const cosmic = st.mods.find((m) => m[0] === 'cosmic_powers');
+  assert(cosmic && cosmic[1], `COSMIC POWERS non chargé : ${JSON.stringify(st.mods)}`);
+  assert(st.supernova && st.ship, 'contenu du mod absent du registre');
+  await page.evaluate(() => { window.__UA.paused = false; });
+  await page.click('[data-testid=btn-menu]');
+  await page.click('[data-testid=tab-mods]');
+  const text = await page.textContent('.menu-body');
+  assert(text.includes('COSMIC POWERS') && text.includes('actif'), 'onglet Mods incomplet');
+  await page.click('.mod-card input[type=checkbox]');
+  const enabled = await page.evaluate(() => JSON.parse(localStorage.getItem('ua.mods.enabled')));
+  assert(Array.isArray(enabled) && !enabled.includes('cosmic_powers'), `désactivation non enregistrée : ${enabled}`);
+  await page.click('.mod-card input[type=checkbox]');
+  await page.click('[data-testid=menu-close]');
+  await freeze(page);
+  return '7 pouvoirs, 1 créature, 1 mission, 1 tenue, 1 vaisseau ajoutés';
+});
+
 await test('Mort et réapparition sans perte de progression', async () => {
   const r = await page.evaluate(() => {
     const g = window.__UA;
@@ -344,6 +370,7 @@ await test('Mode créatif : emplacement séparé, la survie reste intacte', asyn
   await page.evaluate(() => { window.__UA.saveGame(false); window.__UA.toTitle(); });
   const survivalSaved = await page.evaluate(() => localStorage.getItem('ua.save.survival_1'));
   await page.click('[data-testid=creative]');
+  if (await page.isVisible('[data-testid=body-female]')) await page.click('[data-testid=body-female]');
   await page.waitForFunction(() => window.__UA?.ready === true && window.__UA.mode === 'creative');
   await freeze(page);
   const c = await page.evaluate(() => { const g = window.__UA; g.progress.fragments = 99999; g.saveGame(false); return { powers: g.powers.unlocked.size, slot: g.slot }; });
@@ -382,6 +409,7 @@ const touchEv = (type, points) => cdp.send('Input.dispatchTouchEvent', { type, t
 
 await test('Tactile : démarrer une partie au doigt', async () => {
   await tp.tap('[data-testid=new-game]');
+  await tp.tap('[data-testid=body-male]');
   await tp.waitForFunction(() => window.__UA?.ready === true);
   await freeze(tp);
   await tp.evaluate(() => { const g = window.__UA; g.player.setPosition(-2.5, 0.05, 16); g.cameraRig.yaw = 0; });

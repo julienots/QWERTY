@@ -71,6 +71,8 @@ body.touch .joy-base { opacity: calc(var(--ctl-opacity) * 0.35); }
 .btn-action.has-label { border-color: var(--accent); box-shadow: 0 0 14px rgba(255, 210, 63, 0.4); }
 .btn-action.has-label .lbl { opacity: 1; }
 .btn-jump { width: calc(64px * var(--ctl-scale)); height: calc(64px * var(--ctl-scale)); right: calc(100px * var(--ctl-scale)); bottom: 0; }
+.btn-down { width: calc(50px * var(--ctl-scale)); height: calc(50px * var(--ctl-scale)); right: calc(172px * var(--ctl-scale)); bottom: calc(4px * var(--ctl-scale)); }
+.controls:not([data-mode='fly']):not([data-mode='ship']) .btn-down { display: none; }
 .btn-power { width: calc(66px * var(--ctl-scale)); height: calc(66px * var(--ctl-scale)); right: calc(14px * var(--ctl-scale)); bottom: calc(108px * var(--ctl-scale)); border-color: var(--c, #888); box-shadow: 0 0 12px color-mix(in srgb, var(--c, #888) 50%, transparent); }
 .btn-power.unavailable { filter: grayscale(0.8) brightness(0.7); }
 .power-ring { position: absolute; inset: -4px; border-radius: 50%; background: conic-gradient(var(--c, #fff) calc(var(--p, 1) * 360deg), transparent 0); -webkit-mask: radial-gradient(circle, transparent 62%, #000 64%); mask: radial-gradient(circle, transparent 62%, #000 64%); opacity: 0.85; pointer-events: none; }
@@ -198,3 +200,13 @@ body.high-contrast .ctl-btn { border-width: 3px; border-color: #fff; background:
 .travel button { padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(127, 216, 255, 0.45); background: rgba(127, 216, 255, 0.12); color: #fff; font: inherit; cursor: pointer; }
 .travel button:disabled { opacity: 0.45; cursor: not-allowed; }
 .travel small { width: 100%; color: #9fb0c4; }
+
+/* Mods */
+.mod-card { padding: 10px 12px; border-radius: 10px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); margin-bottom: 10px; }
+.mod-card p { margin: 6px 0; font-size: 13px; color: #c8d4e2; }
+.mod-head small { color: #9fb0c4; }
+.mod-head .ok { color: #7dff9a; margin-left: 6px; }
+.mod-head .err { color: #ff6b7d; margin-left: 6px; }
+.mod-errors { font-size: 11px; color: #ffb3bd; white-space: pre-wrap; margin: 4px 0; }
+.mod-tag { color: #ff9cf0; }
+.file-btn { display: inline-block; padding: 10px 14px; border-radius: 10px; border: 1px dashed rgba(127, 216, 255, 0.6); cursor: pointer; color: #e8f4ff; }

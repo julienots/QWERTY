@@ -111,6 +111,13 @@ export class ShipSystem {
         if (!m.isMesh) return;
         m.castShadow = true;
         const mat = m.material as THREE.MeshStandardMaterial;
+        // Livery from the ship definition (mods can repaint a hull).
+        if (mat.name === 'hull_paint' || mat.name === 'accent') {
+          const c = mat.clone();
+          c.userData.shared = false;
+          c.color.set(mat.name === 'hull_paint' ? d.color : d.accent);
+          m.material = c;
+        }
         if (mat.name === 'engine_glow') {
           const c = mat.clone();
           c.userData.shared = false;
