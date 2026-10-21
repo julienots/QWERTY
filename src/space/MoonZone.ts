@@ -168,7 +168,7 @@ export class MoonZone implements Zone {
     const e = makeEarth(6000, 96);
     this.earthGroup = e.group;
     this.root.add(e.group);
-    this.earth = new Impostor(e.group, new THREE.Vector3(0.25, 0.42, -0.87).normalize().multiplyScalar(360000), 6200);
+    this.earth = new Impostor(e.group, new THREE.Vector3(0.55, 0.35, 0.76).normalize().multiplyScalar(110000), 6200);
 
     this.buildLandingSite();
     this.buildRocks(q.viewDistance >= 800 ? 420 : 200);

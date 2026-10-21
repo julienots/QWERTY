@@ -88,7 +88,8 @@ s = await state();
 check(!s.piloting && s.zone === 'moon', 'walking on the Moon');
 await shot('moon-site', { pos: [-5, 14, 40], look: [-30, 9, 12] });
 await shot('moon-ruins', { pos: [225, 32, -150], look: [260, 22, -190] });
-await shot('moon-earth', { pos: [0, 30, 60], look: [25, 72, -27] });
+await shot('moon-earth', { pos: [0, 30, 60], look: [55, 65, 136] });
+await shot('moon-sun', { pos: [0, 30, 60], look: [-55, 68, -14] });
 const ox = (await state()).ox;
 check(ox < 100, `oxygen drains in vacuum (${ox})`);
 // Back to Earth

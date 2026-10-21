@@ -256,6 +256,19 @@ export function tex(name: string): THREE.Texture {
       x.fillRect(0, 0, 64, 64);
       return finish(c, name, 1);
     }
+    case 'flare': {
+      // Steep falloff: a small hot core and a faint wide glare (star seen from space).
+      const [c, x] = canvas(128);
+      const g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+      g.addColorStop(0, 'rgba(255,255,255,1)');
+      g.addColorStop(0.06, 'rgba(255,255,255,0.95)');
+      g.addColorStop(0.12, 'rgba(255,255,255,0.35)');
+      g.addColorStop(0.35, 'rgba(255,255,255,0.08)');
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      x.fillStyle = g;
+      x.fillRect(0, 0, 128, 128);
+      return finish(c, name, 1);
+    }
     case 'cloud': {
       const [c, x] = canvas(256);
       for (let i = 0; i < 26; i++) {

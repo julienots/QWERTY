@@ -34,12 +34,12 @@ export class StationZone implements Zone {
     this.interactables.push(...this.station.interactables);
     // Cabin lighting along the modules
     for (const x of [-22, -4, 14, 32, 50]) {
-      const l = new THREE.PointLight('#e8f2ff', 14, 22, 1.6);
+      const l = new THREE.PointLight('#e8f2ff', 8, 22, 1.6);
       l.position.set(x, 1.2, 0);
       this.root.add(l);
     }
     for (const z of [8, -10]) {
-      const l = new THREE.PointLight('#e8f2ff', 10, 16, 1.6);
+      const l = new THREE.PointLight('#e8f2ff', 6, 16, 1.6);
       l.position.set(0, 1.2, z);
       this.root.add(l);
     }

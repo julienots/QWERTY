@@ -116,10 +116,10 @@ export function sunSprite(): THREE.Group {
   const g = new THREE.Group();
   // Outside an atmosphere the sun is a small, blinding disc with a tight glare: draw it
   // outside tone mapping so it saturates to white and feeds the bloom.
-  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex('glow'), color: new THREE.Color(1.6, 1.45, 1.2), blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false, opacity: 0.55 }));
-  halo.scale.setScalar(1500);
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex('flare'), color: new THREE.Color(1.4, 1.3, 1.15), blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false }));
+  halo.scale.setScalar(2400);
   const core = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex('glow'), color: new THREE.Color(6, 5.6, 5), blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false }));
-  core.scale.setScalar(260);
+  core.scale.setScalar(200);
   g.add(halo, core);
   g.renderOrder = -5;
   return g;
