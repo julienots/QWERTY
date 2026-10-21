@@ -7,11 +7,24 @@ import type { Assets } from '../core/Assets';
  * tiling is broken up by mixing a second, rotated and larger sample driven by low-frequency
  * noise, and the rock layer is tri-planar so cliffs are not stretched.
  */
-export function terrainMaterial(assets: Assets | null, detail: 'low' | 'high'): THREE.MeshStandardMaterial | null {
+export interface TerrainLayers {
+  /** Texture sets for the first three splat channels (the fourth is snow). */
+  sets?: [string, string, string];
+  /** GLSL colour multiplying the first layer (the grass gets its lush tint from it). */
+  tintA?: string;
+  /** Tint of the second layer. */
+  tintB?: string;
+  key?: string;
+}
+
+export function terrainMaterial(assets: Assets | null, detail: 'low' | 'high', layers: TerrainLayers = {}): THREE.MeshStandardMaterial | null {
   const tex = (set: string, kind: 'diff' | 'nor') => assets?.texture(`textures/${set}_${kind}.webp`) ?? null;
+  const [a, b, c] = layers.sets ?? ['grass', 'dirt', 'rock'];
+  const tintA = layers.tintA ?? 'vec3(0.6, 0.84, 0.46) * mix(vec3(1.0), vec3(1.25, 1.08, 0.85), tNoise(vWPos.xz / 23.0) * 0.7)';
+  const tintB = layers.tintB ?? 'vec3(1.0)';
   const maps = {
-    tGrass: tex('grass', 'diff'), tDirt: tex('dirt', 'diff'), tRock: tex('rock', 'diff'),
-    nGrass: tex('grass', 'nor'), nDirt: tex('dirt', 'nor'), nRock: tex('rock', 'nor'),
+    tGrass: tex(a, 'diff'), tDirt: tex(b, 'diff'), tRock: tex(c, 'diff'),
+    nGrass: tex(a, 'nor'), nDirt: tex(b, 'nor'), nRock: tex(c, 'nor'),
   };
   if (Object.values(maps).some((t) => !t)) return null;
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0 });
@@ -72,8 +85,8 @@ vec3 tTriRock(vec3 p, vec3 n) {
   w = pow(w, vec4(1.6));
   wSplat = w / max(1e-4, w.x + w.y + w.z + w.w);
   vec3 grass = tSample(tGrass, uv * 1.15);
-  grass *= vec3(0.6, 0.84, 0.46) * mix(vec3(1.0), vec3(1.25, 1.08, 0.85), tNoise(vWPos.xz / 23.0) * 0.7);
-  vec3 dirt = tSample(tDirt, uv);
+  grass *= ${tintA};
+  vec3 dirt = tSample(tDirt, uv * 0.61 + 0.37) * ${tintB};
   vec3 rock = tTriRock(vWPos * uScale * 0.5, tSafeN(vWNormal));
   vec3 snow = vec3(0.86, 0.89, 0.93) * (0.9 + 0.1 * rock.r);
   diffuseColor.rgb *= grass * wSplat.x + dirt * wSplat.y + rock * wSplat.z + snow * wSplat.w;
@@ -83,7 +96,7 @@ vec3 tTriRock(vec3 p, vec3 n) {
 {
   vec2 uv = vWPos.xz * uScale;
   vec3 tn = (texture2D(nGrass, uv * 1.15).xyz * 2.0 - 1.0) * wSplat.x
-          + (texture2D(nDirt, uv).xyz * 2.0 - 1.0) * wSplat.y
+          + (texture2D(nDirt, uv * 0.61 + 0.37).xyz * 2.0 - 1.0) * wSplat.y
           + (texture2D(nRock, uv * 0.5).xyz * 2.0 - 1.0) * (wSplat.z + wSplat.w * 0.5);
   tn.xy *= 0.9;
   tn.z = max(tn.z, 0.2) + wSplat.w * 0.5;
@@ -95,6 +108,6 @@ vec3 tTriRock(vec3 p, vec3 n) {
   normal = normalize((viewMatrix * vec4(nw, 0.0)).xyz);
 }`);
   };
-  mat.customProgramCacheKey = () => 'terrain-splat-' + detail;
+  mat.customProgramCacheKey = () => 'terrain-splat-' + detail + (layers.key ?? '');
   return mat;
 }

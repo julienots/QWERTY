@@ -8,6 +8,7 @@ import { House } from './House';
 import { Town, ROADS, WATER_TOWER } from './Town';
 import { Townsfolk } from './Townsfolk';
 import { EarthSky } from './EarthSky';
+import { OBSERVATORY } from './Observatory';
 import { smoothstep } from '../core/noise';
 
 /** The starting planet region: the town of Val-Lumen and its surroundings. */
@@ -67,6 +68,7 @@ export class EarthZone implements Zone {
       { x: WATER_TOWER.x, z: WATER_TOWER.z, label: "Château d'eau", color: '#c94b3a' },
       { x: POND.x, z: POND.z, label: 'Parc', color: '#7dff9a' },
       { x: 0, z: -37, label: 'Centre-ville', color: '#d9d4cc' },
+      { x: OBSERVATORY.padX, z: OBSERVATORY.padZ, label: 'Observatoire', color: '#ffd23f' },
     ];
   }
 

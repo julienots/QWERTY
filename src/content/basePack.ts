@@ -76,7 +76,7 @@ export const BASE_PACK: ContentPack = {
       { type: 'zone', zone: 'orbit', text: "Quitter l'atmosphère (monter au-delà de 2 500 m)" },
     ], rewards: { xp: 400, fragments: 20 } },
     { id: 'm_station', title: 'Station Aurore', requires: 'm_ship', description: "Une station internationale orbite au-dessus de la Terre. Son équipage a détecté l'origine de la brèche.", main: true, objectives: [
-      { type: 'reach', zone: 'orbit', x: 62, y: -2, z: 0, radius: 18, text: "S'approcher du sas de la Station Aurore" },
+      { type: 'interact', target: 'airlock', text: 'Entrer dans la Station Aurore par le sas' },
       { type: 'interact', target: 'commander', text: 'Parler à la commandante Ilyana Varga' },
     ], rewards: { xp: 400, fragments: 40, ships: ['faucon', 'pelerin'] } },
     { id: 'm_moon', title: 'Premiers pas sur la Lune', requires: 'm_station', description: "Un signal ancien provient de la face visible de la Lune. Pose-toi et trouves-en la source.", main: true, objectives: [

@@ -92,9 +92,12 @@ export class Assets {
           if (m.isMesh) {
             m.castShadow = true;
             m.receiveShadow = true;
+            // Cached for the whole session: zones must not dispose these when unloading.
+            m.geometry.userData.shared = true;
             const mats = Array.isArray(m.material) ? m.material : [m.material];
             for (const mat of mats) {
               const sm = mat as THREE.MeshStandardMaterial;
+              sm.userData.shared = true;
               // Leaf cards: alpha-tested, double-sided, no sorting artefacts.
               if (/leaves|leaf|twig/i.test(sm.name)) {
                 sm.transparent = false;
@@ -121,6 +124,7 @@ export class Assets {
         t.wrapS = t.wrapT = THREE.RepeatWrapping;
         t.anisotropy = this.maxAniso;
         if (color) t.colorSpace = THREE.SRGBColorSpace;
+        t.userData.shared = true;
         this.textures.set(path, t);
         resolve();
       }, undefined, () => reject(new Error(path)));
@@ -156,6 +160,7 @@ export class Assets {
         let sm = shared.get(key);
         if (!sm) {
           sm = this.material(set as (typeof TEXTURE_SETS)[number], 1, '#888888');
+          sm.userData.shared = true;
           sm.color.copy(mat.color);
           sm.name = mat.name;
           shared.set(key, sm);

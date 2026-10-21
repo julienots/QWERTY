@@ -93,6 +93,15 @@ body.touch .joy-base { opacity: calc(var(--ctl-opacity) * 0.35); }
 .bar.hp.shielded { box-shadow: 0 0 8px #88aaff; border-color: #88aaff; }
 .bar.en { width: 120px; height: 5px; }
 .bar.en .fill { background: linear-gradient(90deg, #4fb8ff, #9ff0ff); }
+.bar.ox { width: 120px; height: 5px; }
+.bar.ox .fill { background: linear-gradient(90deg, #e8f4ff, #9fd8ff); }
+.bar.ox.low .fill { background: #ff8a3d; animation: pulse 0.5s infinite alternate; }
+.bar.ox::before { content: 'O₂'; position: absolute; transform: translate(-22px, -5px); font-size: 10px; color: #cfe8ff; }
+.bar.ox { position: relative; margin-left: 22px; }
+.ship-panel { position: absolute; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom)); transform: translateX(-50%); padding: 8px 14px; border-radius: 12px; background: rgba(6, 12, 22, 0.55); border: 1px solid rgba(127, 216, 255, 0.35); color: #e8f4ff; font-size: 12px; text-align: center; pointer-events: none; min-width: 180px; }
+.ship-panel b { display: block; letter-spacing: 0.12em; text-transform: uppercase; font-size: 11px; color: #7fd8ff; margin-bottom: 4px; }
+.ship-panel .bar.hull { width: 100%; margin-bottom: 4px; }
+.ship-panel .bar.hull .fill { background: linear-gradient(90deg, #7dff9a, #d6ffe0); }
 @keyframes pulse { to { opacity: 0.5; } }
 .frag { font-size: 12px; color: #9ff0ff; font-weight: 600; }
 .zone-label { font-size: 10px; color: var(--muted); }
@@ -182,3 +191,10 @@ body.high-contrast .ctl-btn { border-width: 3px; border-color: #fff; background:
   .dialog { bottom: calc(36% + var(--safe-b)); font-size: 13px; }
 }
 @media (prefers-reduced-motion: reduce) { .title-bg { animation: none; } }
+
+/* Navigation (travel between zones) */
+.travel { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.travel h4 { width: 100%; margin: 0 0 2px; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: #7fd8ff; }
+.travel button { padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(127, 216, 255, 0.45); background: rgba(127, 216, 255, 0.12); color: #fff; font: inherit; cursor: pointer; }
+.travel button:disabled { opacity: 0.45; cursor: not-allowed; }
+.travel small { width: 100%; color: #9fb0c4; }

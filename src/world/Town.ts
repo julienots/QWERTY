@@ -5,6 +5,7 @@ import type { Interactable } from './Zone';
 import type { EarthTerrain } from './Terrain';
 import { CRASH_SITE, POND, WATER_LEVEL } from './Terrain';
 import { batchStatic, block, boxGeo, mat, placeModel, currentAssets } from './build';
+import { buildObservatory } from './Observatory';
 import { instanceModel, variantRoots, TreeField, type InstanceSpec } from './Instanced';
 import { facadeTexture, tex, waterNormalTexture } from '../fx/textures';
 import { mulberry32, Noise2D, smoothstep } from '../core/noise';
@@ -54,6 +55,7 @@ export class Town {
     this.buildPark();
     this.buildWaterTower();
     this.buildCrashSite();
+    this.footprints.push(buildObservatory(this.group, physics, (x, z) => this.terrain.heightAt(x, z)));
     this.buildTrees(treeCount);
     this.buildProps();
     this.shard.userData.dynamic = true;

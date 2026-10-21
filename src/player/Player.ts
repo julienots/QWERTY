@@ -24,6 +24,8 @@ export class Player {
   health = 100;
   energy = 0;
   flying = false;
+  /** Breathable air reserve in vacuum (0-100). */
+  oxygen = 100;
   shield = 0;
   shieldTime = 0;
   invulnerable = 0;
@@ -136,7 +138,8 @@ export class Player {
     const right = new THREE.Vector3(-Math.cos(camYaw), 0, Math.sin(camYaw));
     const move = fwd.clone().multiplyScalar(input.moveY).addScaledVector(right, input.moveX);
     const moveMag = Math.min(1, move.length());
-    const canFly = powers.hasPassive('flight') || game.mode === 'creative';
+    const zeroG = !!zone.zeroG;
+    const canFly = powers.hasPassive('flight') || game.mode === 'creative' || zeroG;
     const superJump = powers.hasPassive('superJump') || game.mode === 'creative';
     const gravity = zone.gravity;
 
@@ -166,6 +169,8 @@ export class Player {
         this.flying = false;
       }
     } else this.flying = false;
+    // Weightlessness: always floating, never "landing".
+    if (zeroG) this.flying = true;
 
     const speedBuff = this.buff('speed');
     if (this.flying) {
@@ -180,6 +185,7 @@ export class Player {
         if (b.y > 120 && stage >= 3) flySpeed = 160 + stage * 40;
       }
       if (game.mode === 'creative' && input.run) flySpeed = Math.max(flySpeed, 220);
+      if (zeroG && zone.floatSpeed) flySpeed = Math.min(flySpeed, zone.floatSpeed * (input.run ? 2.5 : 1));
       flySpeed *= speedBuff;
       const vert = (input.jumpHeld ? 1 : 0) - (input.descendHeld ? 1 : 0);
       const target = dir.multiplyScalar(flySpeed);
@@ -226,7 +232,7 @@ export class Player {
       const floor = zone.physics.surfaceHeight(b.x, b.z, b.y, b.radius, b.stepHeight);
       if (b.y - floor < 0.5) { b.y = floor; b.vy = 0; b.onGround = true; }
     }
-    if (this.flying && b.onGround && b.vy <= 0.1 && !input.jumpHeld) {
+    if (this.flying && !zeroG && b.onGround && b.vy <= 0.1 && !input.jumpHeld) {
       // Touching down ends flight
       this.flying = false;
       game.audio.play('land', { volume: 0.4 });
@@ -247,7 +253,7 @@ export class Player {
     this.wasOnGround = b.onGround;
 
     // World bounds
-    const lim = 2300;
+    const lim = zone.id === 'orbit' ? 5200 : 2300;
     b.x = clamp(b.x, -lim, lim);
     b.z = clamp(b.z, -lim, lim);
 

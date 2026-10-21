@@ -109,6 +109,28 @@ export class Menu {
     const markers = g.zone.mapMarkers();
     legend.innerHTML = `<b>${escapeHtml(g.zone.name)}</b>` + markers.map((m) => `<span><i style="background:${m.color}"></i>${escapeHtml(m.label)}</span>`).join('') + '<span><i style="background:#ffd23f"></i>Objectif</span>';
     if (g.mode === 'creative') legend.innerHTML += '<em>Touchez la carte pour vous téléporter.</em>';
+    // Navigation between zones (ship warp drive or the station's navigation terminal)
+    const dests = g.travelOptions();
+    if (dests.length && (g.ships.def || g.zone.id !== 'earth')) {
+      const nav = document.createElement('div');
+      nav.className = 'travel';
+      nav.innerHTML = '<h4>Navigation</h4>';
+      let reason = '';
+      for (const d of dests) {
+        const b = document.createElement('button');
+        b.textContent = d.label;
+        b.disabled = !d.enabled;
+        b.dataset.testid = `travel-${d.id}`;
+        if (!d.enabled && d.reason) reason = d.reason;
+        b.addEventListener('click', () => {
+          this.close();
+          g.travel(d.id, { from: 'warp', board: g.zone.id === 'station' });
+        });
+        nav.appendChild(b);
+      }
+      if (reason) nav.insertAdjacentHTML('beforeend', `<small>${escapeHtml(reason)}</small>`);
+      legend.appendChild(nav);
+    }
     canvas.addEventListener('click', (e) => {
       if (g.mode !== 'creative') return;
       const r = canvas.getBoundingClientRect();

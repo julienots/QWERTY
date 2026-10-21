@@ -32,6 +32,7 @@ export class MissionManager {
     game.bus.on('interact', (id: string) => this.onEvent((o) => o.type === 'interact' && o.target === id));
     game.bus.on('enemy:killed', (e: { id: string }) => this.onEvent((o) => o.type === 'kill' && (o.enemy === '*' || o.enemy === e.id), true));
     game.bus.on('power:used', (id: string) => this.onEvent((o) => o.type === 'usePower' && o.power === id, true));
+    game.bus.on('ship:board', () => this.onEvent((o) => o.type === 'board'));
   }
 
   load(completed: string[], active: string[], progress: Record<string, number[]>) {
@@ -94,6 +95,7 @@ export class MissionManager {
     if (m.rewards.stage !== undefined) g.progress.setStage(m.rewards.stage);
     for (const p of m.rewards.powers ?? []) g.powers.unlock(p);
     for (const [item, n] of Object.entries(m.rewards.items ?? {})) g.inventory[item] = (g.inventory[item] ?? 0) + n;
+    for (const s of m.rewards.ships ?? []) g.ships.grant(s);
     g.bus.emit('mission:completed', id);
     this.unlockNew();
     g.autosave();
@@ -167,7 +169,14 @@ export class MissionManager {
           break;
         }
         case 'altitude':
-          if (p.y >= o.value) this.advance(id);
+          if (g.zone.id === 'earth' && p.y >= o.value) this.advance(id);
+          break;
+        case 'zone':
+          if (g.zone.id === o.zone && !g.traveling) this.advance(id);
+          break;
+        case 'board':
+          // Already aboard when the objective starts.
+          if (g.ships.piloting) this.advance(id);
           break;
         case 'kill': {
           const key = id + ':' + st[0];

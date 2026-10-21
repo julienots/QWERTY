@@ -114,10 +114,12 @@ export function starfield(count: number): THREE.Points {
 /** Bright sun disc with a glow halo, kept far away along the sun direction. */
 export function sunSprite(): THREE.Group {
   const g = new THREE.Group();
-  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex('glow'), color: '#fff2c8', blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
-  halo.scale.setScalar(2600);
-  const core = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex('glow'), color: '#ffffff', blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
-  core.scale.setScalar(700);
+  // Outside an atmosphere the sun is a small, blinding disc with a tight glare: draw it
+  // outside tone mapping so it saturates to white and feeds the bloom.
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex('glow'), color: new THREE.Color(1.6, 1.45, 1.2), blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false, opacity: 0.55 }));
+  halo.scale.setScalar(1500);
+  const core = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex('glow'), color: new THREE.Color(6, 5.6, 5), blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false }));
+  core.scale.setScalar(260);
   g.add(halo, core);
   g.renderOrder = -5;
   return g;

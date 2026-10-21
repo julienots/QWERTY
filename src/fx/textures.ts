@@ -127,6 +127,41 @@ export function tex(name: string): THREE.Texture {
       }
       return finish(c, name);
     }
+    case 'panel': {
+      // Space-station interior: padded off-white panels, seams, handrail mounts and labels.
+      const [c, x] = canvas(512);
+      x.fillStyle = '#c9ccd0';
+      x.fillRect(0, 0, 512, 512);
+      const cols = 2, rows = 2, w = 512 / cols, h = 512 / rows;
+      for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+        const px = i * w + 5, py = j * h + 5, pw = w - 10, ph = h - 10;
+        const g = x.createLinearGradient(px, py, px, py + ph);
+        const v = 0.95 + rnd() * 0.05;
+        g.addColorStop(0, `rgb(${Math.floor(246 * v)},${Math.floor(246 * v)},${Math.floor(242 * v)})`);
+        g.addColorStop(1, `rgb(${Math.floor(222 * v)},${Math.floor(223 * v)},${Math.floor(220 * v)})`);
+        x.fillStyle = g;
+        x.beginPath();
+        x.roundRect(px, py, pw, ph, 14);
+        x.fill();
+        // quilting stitches
+        x.strokeStyle = 'rgba(0,0,0,0.07)';
+        x.lineWidth = 2;
+        for (let k = 1; k < 3; k++) { x.beginPath(); x.moveTo(px + 10, py + (ph * k) / 3); x.lineTo(px + pw - 10, py + (ph * k) / 3); x.stroke(); }
+        // fasteners
+        x.fillStyle = '#8d939a';
+        for (const [fx, fy] of [[px + 12, py + 12], [px + pw - 12, py + 12], [px + 12, py + ph - 12], [px + pw - 12, py + ph - 12]]) { x.beginPath(); x.arc(fx, fy, 4, 0, Math.PI * 2); x.fill(); }
+        // occasional velcro patch / label
+        if (rnd() < 0.7) {
+          x.fillStyle = rnd() < 0.5 ? '#2c3e66' : '#5a5e63';
+          x.fillRect(px + 30 + rnd() * (pw - 120), py + 30 + rnd() * (ph - 90), 50 + rnd() * 30, 18 + rnd() * 16);
+        }
+        if (rnd() < 0.5) {
+          x.fillStyle = '#e8b12c';
+          x.fillRect(px + pw - 70, py + ph - 34, 52, 12);
+        }
+      }
+      return finish(c, name);
+    }
     case 'tiles': {
       const [c, x] = canvas(256);
       x.fillStyle = '#9a9a9a';

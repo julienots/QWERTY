@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import type { CollisionWorld } from '../physics/CollisionWorld';
 import type { Game } from '../Game';
 import type { Interactable } from '../world/Zone';
-import { batchStatic, block, boxGeo, mat } from '../world/build';
+import { batchStatic, block, boxGeo, currentAssets, mat } from '../world/build';
 import { Humanoid } from '../player/Humanoid';
+import { CharacterModel, type Avatar } from '../player/CharacterModel';
 
 /** Hollow pressurised volume (inner bounds). */
 interface Volume { minX: number; minY: number; minZ: number; maxX: number; maxY: number; maxZ: number }
@@ -39,12 +40,12 @@ export class Station {
   readonly interactables: Interactable[] = [];
   readonly volumes: Volume[] = [];
   readonly dockPoint = new THREE.Vector3(66, -4, 0);
-  private commander: Humanoid;
+  private commander: Avatar;
   private panels: THREE.Mesh[] = [];
   private t = 0;
 
   constructor(private physics: CollisionWorld) {
-    const wall = mat('#d9dee4', { map: 'metal', rough: 0.45, metal: 0.3 });
+    const wall = mat('#f4f5f6', { map: 'panel', rough: 0.75, metal: 0 });
     const floor = mat('#9aa3ad', { map: 'metal', rough: 0.6, metal: 0.4 });
     const strip = new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#cfe8ff', emissiveIntensity: 2.2 });
     const hull = mat('#eef1f4', { map: 'metal', rough: 0.4, metal: 0.25 });
@@ -125,6 +126,10 @@ export class Station {
     this.screen(45, 0.3, IN - 0.02, Math.PI, ['HANGAR', 'Vaisseaux disponibles', 'Toucher pour changer de vaisseau'], '#ffd23f');
     this.screen(-20, 0.3, IN - 0.02, Math.PI, ['INFIRMERIE', 'Soins • Oxygène • Sauvegarde'], '#7dff9a');
     this.interactables.push(
+      {
+        id: 'station_airlock', position: new THREE.Vector3(53.5, 0, 0), radius: 3, icon: '🚪', label: () => 'Sortir dans l’espace (sas)',
+        use: (game) => game.travel('orbit', { from: 'airlock' }),
+      },
       { id: 'nav_terminal', position: new THREE.Vector3(20, 0.3, -IN + 0.4), radius: 2.4, icon: '🧭', label: () => 'Ouvrir la navigation', use: (game) => game.menu.open('map') },
       { id: 'hangar', position: new THREE.Vector3(45, 0.3, IN - 0.4), radius: 2.4, icon: '🚀', label: (game) => (game.ships.owned.length > 1 ? 'Changer de vaisseau' : null), use: (game) => game.ships.cycleShip() },
       {
@@ -139,7 +144,12 @@ export class Station {
     );
 
     // Commander (floating astronaut)
-    this.commander = new Humanoid({ skin: '#c68e63', suit: '#f2f2f2', accent: '#2f5d9e', hair: '#111111', pants: '#e8e8e8' });
+    // Commander in a white flight suit (rigged character; procedural figure as fallback).
+    const colors = { skin: '#c68e63', suit: '#eef0f3', accent: '#2f5d9e', hair: '#111111', pants: '#e8e8e8', aura: '#2f5d9e' };
+    const assets = currentAssets();
+    this.commander = CharacterModel.available(assets, 'suit_body') ? new CharacterModel(assets!, 'suit_body', { height: 1.72 }) : new Humanoid(colors);
+    this.commander.setColors(colors);
+    this.commander.setGlow(0.2);
     this.commander.root.position.set(0, -0.9, 7);
     this.commander.root.rotation.y = Math.PI;
     this.group.add(this.commander.root);

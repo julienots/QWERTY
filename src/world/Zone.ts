@@ -37,16 +37,27 @@ export interface Zone {
   update(dt: number, game: Game): void;
   /** Called when quality settings change. */
   applyQuality?(game: Game): void;
+  /** Weightless zone: the player floats (forced flight, limited speed). */
+  readonly zeroG?: boolean;
+  readonly floatSpeed?: number;
+  /** Chase-camera distance override for cramped interiors. */
+  readonly cameraDistance?: number;
+  /** Image-based lighting strength (space is much darker than Earth's sky). */
+  readonly envIntensity?: number;
+  /** Background (e.g. the NASA star map) when the zone has no sky dome. */
+  readonly background?: THREE.Texture | THREE.Color | null;
+  /** Breathable air at this point (pressurised modules). */
+  breathable?(p: THREE.Vector3): boolean;
   dispose(): void;
 }
 
-/** Recursively frees GPU resources of an object tree. */
+/** Recursively frees GPU resources of an object tree (assets cached for the session are kept). */
 export function disposeObject(root: THREE.Object3D): void {
   root.traverse((o) => {
     const m = o as THREE.Mesh;
-    if (m.geometry) m.geometry.dispose();
+    if (m.geometry && !m.geometry.userData.shared) m.geometry.dispose();
     const mat = m.material as THREE.Material | THREE.Material[] | undefined;
-    if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
-    else mat?.dispose();
+    for (const x of Array.isArray(mat) ? mat : mat ? [mat] : []) if (!x.userData.shared) x.dispose();
+    if ((m as THREE.InstancedMesh).isInstancedMesh) (m as THREE.InstancedMesh).dispose();
   });
 }

@@ -33,8 +33,16 @@ import type { Townsfolk } from './world/Townsfolk';
 import { clearMaterialCache, useAssets } from './world/build';
 import type { Assets } from './core/Assets';
 import type { BodyKind } from './player/CharacterModel';
+import { ShipSystem } from './space/ShipSystem';
+import { OrbitZone, AIRLOCK } from './space/OrbitZone';
+import { StationZone } from './space/StationZone';
+import { MoonZone } from './space/MoonZone';
 
-export interface ShipLike { active: boolean; position: THREE.Vector3 }
+export type ZoneId = 'earth' | 'orbit' | 'station' | 'moon';
+/** How the player arrives in a zone. */
+export interface TravelOptions { from?: 'earth' | 'space' | 'airlock' | 'moon' | 'warp'; board?: boolean }
+
+export const ZONE_NAMES: Record<ZoneId, string> = { earth: 'Terre — Val-Lumen', orbit: 'Orbite — Station Aurore', station: 'Station Aurore (intérieur)', moon: 'Lune — Mer de la Tranquillité' };
 
 /** Owns every system and runs the main loop. */
 export class Game {
@@ -76,7 +84,9 @@ export class Game {
   running = false;
   timeSlowFx = 0;
   creativeHostile = false;
-  ship: ShipLike | null = null;
+  readonly ships: ShipSystem;
+  /** True while a zone transition is running (fade). */
+  traveling = false;
   private composer: EffectComposer | null = null;
   private clock = new THREE.Clock();
   private autosaveTimer = 60;
@@ -121,6 +131,7 @@ export class Game {
     this.powers = new PowerSystem(this);
     this.progress = new Progress(this);
     this.missions = new MissionManager(this);
+    this.ships = new ShipSystem(this);
     this.particles = new Particles(1500);
     this.setQualityProfile();
 
@@ -205,6 +216,8 @@ export class Game {
   }
 
   get sky(): EarthSky | null { return (this.zone as EarthZone | undefined)?.sky ?? null; }
+  /** The piloted ship (camera and HUD use it). */
+  get ship() { return this.ships; }
   get townsfolk(): Townsfolk | null { return (this.zone as EarthZone | undefined)?.folk ?? null; }
 
   currentSkin(): SkinDef {
@@ -275,6 +288,9 @@ export class Game {
     this.player.health = Math.min(this.player.maxHealth, Math.max(1, d.player.health));
     this.player.energy = Math.min(this.player.maxEnergy, d.player.energy);
     this.player.flying = d.player.flying && this.powers.hasPassive('flight');
+    this.player.oxygen = d.player.oxygen ?? 100;
+    this.ships.load(d.ships);
+    this.ships.placeInZone();
     this.cameraRig.snapBehind(d.player.yaw);
   }
 
@@ -292,13 +308,86 @@ export class Game {
     this.hud.clearWorld();
     this.mapCache = null;
     switch (id) {
+      case 'orbit': this.zone = new OrbitZone(this); break;
+      case 'station': this.zone = new StationZone(this); break;
+      case 'moon': this.zone = new MoonZone(this); break;
       default:
         this.zone = new EarthZone(this);
     }
     this.scene.add(this.zone.root);
     const sky = this.sky;
     this.scene.fog = sky ? sky.fog : null;
-    this.scene.background = sky ? null : new THREE.Color('#000000');
+    this.scene.background = sky ? null : this.zone.background ?? new THREE.Color('#000000');
+    this.scene.backgroundIntensity = 0.55;
+  }
+
+  /**
+   * Moves the player (and the piloted ship) to another zone with a fade: the previous zone is
+   * unloaded, the new one built, and the player placed according to how they arrive.
+   */
+  travel(dest: ZoneId, opts: TravelOptions = {}) {
+    if (this.traveling || this.zone.id === dest) return;
+    this.traveling = true;
+    const withShip = this.ships.piloting || (!!opts.board && !!this.ships.def);
+    const label = opts.from === 'warp' ? 'Saut de distorsion…' : dest === 'earth' ? 'Entrée dans l’atmosphère…' : dest === 'orbit' && opts.from === 'earth' ? 'Sortie de l’atmosphère…' : '';
+    if (opts.from === 'warp') this.audio.play('warp', { volume: 0.9 });
+    this.fadeOut(() => {
+      if (opts.board && !this.ships.piloting && this.ships.def) this.ships.piloting = true;
+      this.ships.prepareTravel(withShip);
+      this.loadZone(dest);
+      const a = this.arrival(dest, opts.from, withShip);
+      this.player.setPosition(a.pos.x, a.pos.y, a.pos.z);
+      this.player.yaw = a.yaw;
+      this.player.flying = !!this.zone.zeroG || (a.pos.y - this.zone.groundAt(a.pos.x, a.pos.z) > 2 && (this.powers.hasPassive('flight') || this.mode === 'creative'));
+      this.player.root.visible = !withShip;
+      this.ships.yaw = a.yaw;
+      this.ships.placeInZone();
+      this.cameraRig.snapBehind(a.yaw);
+      this.cameraRig.pitch = 0.15;
+      this.traveling = false;
+      this.bus.emit('zone:entered', dest);
+      this.hud.banner(ZONE_NAMES[dest].split(' — ')[0].toUpperCase(), ZONE_NAMES[dest].split(' — ')[1] ?? '', '#7fd8ff', dest === 'moon' ? '☾' : dest === 'earth' ? '🜨' : '✦');
+      this.saveGame(false);
+    }, label);
+  }
+
+  private arrival(dest: ZoneId, from: TravelOptions['from'], withShip: boolean): { pos: THREE.Vector3; yaw: number } {
+    const z = this.zone;
+    switch (dest) {
+      case 'earth':
+        return from === 'space' || from === 'warp' || withShip
+          ? { pos: new THREE.Vector3(-150, 1400, 520), yaw: Math.PI }
+          : { pos: z.spawn.clone(), yaw: Math.PI / 2 };
+      case 'orbit':
+        if (from === 'airlock') return { pos: AIRLOCK.clone().add(new THREE.Vector3(0, 0, 7)), yaw: 0 };
+        if (from === 'earth') return { pos: new THREE.Vector3(30, -200, 320), yaw: Math.PI };
+        return { pos: new THREE.Vector3(160, 40, 420), yaw: Math.PI - 0.35 };
+      case 'station':
+        return { pos: z.spawn.clone(), yaw: -Math.PI / 2 };
+      case 'moon': {
+        if (withShip) return { pos: new THREE.Vector3(80, z.groundAt(80, 180) + 220, 180), yaw: Math.PI + 0.3 };
+        return { pos: z.spawn.clone(), yaw: 0 };
+      }
+    }
+  }
+
+  /** Destinations reachable right now through the navigation interface. */
+  travelOptions(): { id: ZoneId; label: string; enabled: boolean; reason?: string }[] {
+    const here = this.zone.id;
+    const atTerminal = here === 'station';
+    const shipWarp = this.ships.piloting && !!this.ships.def?.canWarp;
+    const hasShip = !!this.ships.def;
+    const can = atTerminal || shipWarp;
+    const out: { id: ZoneId; label: string; enabled: boolean; reason?: string }[] = [];
+    for (const id of ['earth', 'orbit', 'moon'] as ZoneId[]) {
+      if (id === here) continue;
+      let enabled = can;
+      let reason: string | undefined;
+      if (!can) reason = 'Pilote un vaisseau à moteur de distorsion, ou utilise le terminal de la station';
+      if (id === 'moon' && !hasShip) { enabled = false; reason = 'Il te faut un vaisseau'; }
+      out.push({ id, label: ZONE_NAMES[id], enabled, reason });
+    }
+    return out;
   }
 
   private intro() {
@@ -323,7 +412,7 @@ export class Game {
       fragments: this.progress.fragments,
       skin: this.skinId,
       flying: p.flying,
-      oxygen: d.player.oxygen ?? 100,
+      oxygen: p.oxygen,
       body: d.player.body ?? 'human_male',
     };
     d.powers = {
@@ -339,6 +428,7 @@ export class Game {
       progress: JSON.parse(JSON.stringify(this.missions.progress)),
       counters: d.missions.counters ?? {},
     };
+    d.ships = this.ships.save();
     d.world.time = this.time;
     d.world.day = this.day;
     if (this.sky) d.world.weather = this.sky.weather;
@@ -418,9 +508,11 @@ export class Game {
     this.dying = 1;
     this.audio.play('boom', { volume: 0.5, pitch: 0.5 });
     this.fadeOut(() => {
-      const home = this.zone.id === 'earth' ? this.zone.spawn : this.zone.spawn;
+      const home = this.zone.spawn;
+      if (this.ships.piloting) { this.ships.piloting = false; this.player.root.visible = true; }
       this.player.setPosition(home.x, home.y + 0.1, home.z);
-      this.player.flying = false;
+      this.player.oxygen = 100;
+      this.player.flying = !!this.zone.zeroG;
       this.player.health = this.player.maxHealth;
       this.player.energy = this.player.maxEnergy;
       this.player.invulnerable = 3;
@@ -428,7 +520,7 @@ export class Game {
       for (const e of this.enemies.alive) if (e.tag === 'ambient') e.alive = false;
       this.missions.resetSpawns();
       this.dying = 0;
-      this.hud.say('', 'Tu reprends connaissance chez toi. Rien de perdu — sauf un peu de fierté.', 4);
+      this.hud.say('', this.zone.id === 'earth' ? 'Tu reprends connaissance chez toi. Rien de perdu — sauf un peu de fierté.' : 'Tu reprends connaissance, en sécurité. Rien de perdu — sauf un peu de fierté.', 4);
     }, 'Tu as perdu connaissance…');
   }
 
@@ -498,16 +590,22 @@ export class Game {
     for (let i = 1; i <= 8; i++) if (input.consume('key:Digit' + i) && this.powers.favorites[i - 1]) this.powers.setActive(this.powers.favorites[i - 1]);
     if (input.consume('key:KeyM')) this.menu.open('map');
 
-    this.player.update(dt, this);
+    if (this.ships.piloting) this.ships.update(dt, this);
+    else {
+      this.player.update(dt, this);
+      this.ships.update(dt, this);
+    }
     this.cameraRig.update(dt, this);
+    this.updateEnvironment(dt);
 
     // Interaction / primary action
-    this.currentInteract = this.findInteractable();
+    this.currentInteract = this.ships.piloting ? null : this.findInteractable();
     if (input.consume('action')) {
-      if (this.currentInteract) this.currentInteract.use(this);
+      if (this.ships.piloting) this.ships.disembark(this);
+      else if (this.currentInteract) this.currentInteract.use(this);
       else this.combat.punch();
     }
-    if (input.consume('power')) {
+    if (!this.ships.piloting && input.consume('power')) {
       if (this.powers.active) this.powers.cast();
       else if (this.progress.stage === 0) this.hud.toast("Tu n'as encore aucun pouvoir…");
     }
@@ -520,7 +618,7 @@ export class Game {
     this.combat.update(dt);
     this.missions.update(dt);
     this.particles.update(dt);
-    this.scene.environmentIntensity = this.sky ? this.sky.envIntensity : 0.35;
+    this.scene.environmentIntensity = this.sky ? this.sky.envIntensity : this.zone.envIntensity ?? 0.35;
     this.audio.update();
     const fwd = this.cameraRig.forward();
     this.audio.setListener(this.camera.position, fwd);
@@ -534,12 +632,31 @@ export class Game {
     if (this.autosaveTimer <= 0) { this.autosaveTimer = 60; this.saveGame(false); }
   }
 
+  /** Breathing, vacuum and the edges of each zone (atmosphere exit, re-entry). */
+  private updateEnvironment(dt: number) {
+    const p = this.player;
+    const z = this.zone;
+    const breathable = z.hasAtmosphere || this.ships.piloting || !!z.breathable?.(p.position);
+    if (breathable || this.mode === 'creative') p.oxygen = Math.min(100, p.oxygen + dt * 25);
+    else {
+      // The Essence slowly adapts the body to the void; the space suit helps a lot.
+      const suit = this.skinId === 'astronaut' || this.skinId === 'cosmic_god';
+      const rate = (suit ? 0.35 : 1) * (this.progress.stage >= 4 ? 0.5 : 1) * (this.progress.stage >= 5 ? 0 : 1);
+      p.oxygen = Math.max(0, p.oxygen - dt * rate * 1.1);
+      if (p.oxygen <= 0) {
+        p.damage(6 * dt, this);
+        if (Math.random() < dt) this.hud.toast('⚠ Plus d’oxygène ! Rejoins la station ou ton vaisseau');
+      }
+    }
+    if (z.id === 'earth' && p.position.y > 2500) this.travel('orbit', { from: 'earth' });
+  }
+
   private findInteractable(): Interactable | null {
     const p = this.player.position;
     const chest = new THREE.Vector3(p.x, p.y + 1.1, p.z);
     const facing = new THREE.Vector3(Math.sin(this.player.yaw), 0, Math.cos(this.player.yaw));
     let best: Interactable | null = null, bestScore = -Infinity;
-    for (const it of this.zone.interactables) {
+    for (const it of [...this.zone.interactables, ...this.ships.interactables]) {
       const d = it.position.distanceTo(chest);
       if (d > it.radius) continue;
       if (it.label(this) === null) continue;
@@ -555,6 +672,19 @@ export class Game {
   private updateControls() {
     const p = this.player;
     const it = this.currentInteract;
+    if (this.ships.piloting) {
+      this.input.setContext({
+        actionLabel: this.ships.speed < 9 ? 'Débarquer' : null,
+        actionIcon: '⏏',
+        jumpIcon: '⇧',
+        powerIcon: '◎',
+        powerColor: this.ships.def?.accent ?? '#ffd23f',
+        powerReady: 1,
+        powerAvailable: true,
+        mode: 'ship',
+      });
+      return;
+    }
     const canFly = this.powers.hasPassive('flight') || this.mode === 'creative';
     const active = this.powers.active ? this.content.power(this.powers.active) : null;
     this.input.setContext({

@@ -34,12 +34,13 @@ export class CameraRig {
     const p = game.player;
     const flying = p.flying;
     const speed = p.velocity.length();
-    this.targetDistance = game.ship?.active ? 14 : flying ? 5.5 + Math.min(4, speed / 25) : 4.2;
+    this.targetDistance = game.ship?.active ? game.ships.chaseDistance : flying ? 5.5 + Math.min(4, speed / 25) : 4.2;
     const inside = game.zone.id === 'earth' && Math.abs(p.position.x) < 7 && Math.abs(p.position.z) < 6 && p.position.y < 2.5;
     if (inside) this.targetDistance = 3.4;
+    if (game.zone.cameraDistance && !game.ship?.active) this.targetDistance = game.zone.cameraDistance;
 
     const focus = game.ship?.active ? game.ship.position : p.position;
-    this.pivot.set(focus.x, focus.y + (game.ship?.active ? 2.5 : 1.55), focus.z);
+    this.pivot.set(focus.x, focus.y + (game.ship?.active ? game.ships.chaseDistance * 0.18 : 1.55), focus.z);
     if (this.first) { this.smoothPivot.copy(this.pivot); this.first = false; }
     this.smoothPivot.lerp(this.pivot, damp(speed > 30 ? 30 : 18, dt));
 

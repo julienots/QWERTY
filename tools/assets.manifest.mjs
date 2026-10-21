@@ -98,7 +98,7 @@ export const nasaModels = [
 
 /** NASA imagery (public domain): Blue Marble, Black Marble, clouds, LRO Moon, Deep Star Maps. */
 export const nasaImages = [
-  { url: 'https://eoimages.gsfc.nasa.gov/images/imagerecords/74000/74218/world.200412.3x5400x2700.jpg', out: 'earth_day', width: 2048, title: 'Blue Marble Next Generation (NASA Earth Observatory)' },
+  { url: 'https://eoimages.gsfc.nasa.gov/images/imagerecords/74000/74218/world.200412.3x5400x2700.jpg', out: 'earth_day', width: 4096, title: 'Blue Marble Next Generation (NASA Earth Observatory)' },
   { url: 'https://eoimages.gsfc.nasa.gov/images/imagerecords/79000/79765/dnb_land_ocean_ice.2012.3600x1800.jpg', out: 'earth_night', width: 2048, title: 'Black Marble 2012 (NASA Earth Observatory / NOAA)' },
   { url: 'https://eoimages.gsfc.nasa.gov/images/imagerecords/57000/57747/cloud_combined_2048.jpg', out: 'earth_clouds', width: 2048, title: 'Blue Marble clouds (NASA Earth Observatory)' },
   { url: 'https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/lroc_color_poles_2k.tif', out: 'moon_color', width: 2048, title: 'CGI Moon Kit — LRO color (NASA SVS)' },

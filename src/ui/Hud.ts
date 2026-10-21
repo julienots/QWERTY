@@ -41,6 +41,9 @@ export class Hud {
   private bars = new Map<object, HTMLElement>();
   private tmp = new THREE.Vector3();
   private zoneLabel: HTMLElement;
+  private ox: HTMLElement;
+  private oxFill: HTMLElement;
+  private shipPanel: HTMLElement;
 
   constructor(container: HTMLElement) {
     const el = (cls: string, parent: HTMLElement, html = '') => {
@@ -57,6 +60,8 @@ export class Hud {
     this.hpFill = this.hp.firstElementChild as HTMLElement;
     this.en = el('bar en', status, '<div class="fill"></div>');
     this.enFill = this.en.firstElementChild as HTMLElement;
+    this.ox = el('bar ox hidden', status, '<div class="fill"></div>');
+    this.oxFill = this.ox.firstElementChild as HTMLElement;
     this.frag = el('frag', status);
     this.zoneLabel = el('zone-label', status);
     this.obj = el('objective', this.root);
@@ -66,6 +71,7 @@ export class Hud {
     this.objArrow = el('obj-arrow', row, '➤');
     this.objDist = el('obj-dist', row);
     this.reticle = el('reticle', this.root);
+    this.shipPanel = el('ship-panel hidden', this.root, '<b></b><div class="bar hull"><div class="fill"></div></div><span class="spd"></span>');
     this.dialog = el('dialog hidden', this.root);
     this.dialog.addEventListener('pointerdown', (e) => { e.stopPropagation(); this.lineTime = 999; });
     this.toasts = el('toasts', this.root);
@@ -146,6 +152,25 @@ export class Hud {
     const hasEnergy = p.maxEnergy > 0;
     this.en.classList.toggle('hidden', !hasEnergy);
     if (hasEnergy) this.enFill.style.width = `${(100 * p.energy) / p.maxEnergy}%`;
+    // Oxygen (only relevant in vacuum)
+    const showOx = p.oxygen < 99.5 || (!game.zone.hasAtmosphere && !game.ships.piloting && !game.zone.breathable?.(p.position));
+    this.ox.classList.toggle('hidden', !showOx);
+    if (showOx) {
+      this.oxFill.style.width = `${p.oxygen}%`;
+      this.ox.classList.toggle('low', p.oxygen < 25);
+    }
+    // Ship status
+    const sh = game.ships;
+    this.shipPanel.classList.toggle('hidden', !sh.piloting);
+    if (sh.piloting && sh.def) {
+      const b = this.shipPanel.querySelector('b')!;
+      if (b.textContent !== sh.def.name) b.textContent = sh.def.name;
+      (this.shipPanel.querySelector('.hull .fill') as HTMLElement).style.width = `${sh.hull * 100}%`;
+      const alt = Math.max(0, p.position.y - game.zone.groundAt(p.position.x, p.position.z));
+      const spd = `${Math.round(sh.speed * 3.6)} km/h${alt < 1e5 ? ` · alt. ${Math.round(alt)} m` : ''}`;
+      const sp = this.shipPanel.querySelector('.spd')!;
+      if (sp.textContent !== spd) sp.textContent = spd;
+    }
     const stageText = `${game.progress.stageName} · Niv. ${game.progress.level}`;
     if (this.stage.textContent !== stageText) this.stage.textContent = stageText;
     const fragText = game.progress.fragments > 0 || game.progress.stage > 0 ? `◆ ${game.progress.fragments}` : '';
