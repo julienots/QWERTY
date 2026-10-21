@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 import { Noise2D, smoothstep } from '../core/noise';
 import { tex } from '../fx/textures';
+import { currentAssets } from './build';
+import { terrainMaterial } from './TerrainMaterial';
+
+export type SplatFn = (x: number, z: number, h: number, slope: number) => [number, number, number, number];
 
 /**
  * A regular height grid. Rendering and physics share the same triangulation, so the
@@ -45,10 +49,11 @@ export class HeightGrid {
     return h11 + (h01 - h11) * (1 - u) + (h10 - h11) * (1 - v);
   }
 
-  buildGeometry(colorFn: (x: number, z: number, h: number, slope: number) => THREE.Color, skirt = 0): THREE.BufferGeometry {
+  buildGeometry(colorFn: (x: number, z: number, h: number, slope: number) => THREE.Color, skirt: number | ((x: number, z: number, h: number) => number) = 0, splatFn?: SplatFn): THREE.BufferGeometry {
     const n = this.n;
     const pos: number[] = [];
     const col: number[] = [];
+    const spl: number[] = [];
     const uv: number[] = [];
     const idx: number[] = [];
     for (let j = 0; j < n; j++) {
@@ -61,6 +66,7 @@ export class HeightGrid {
         pos.push(x, h, z);
         const c = colorFn(x, z, h, slope);
         col.push(c.r, c.g, c.b);
+        if (splatFn) spl.push(...splatFn(x, z, h, slope));
         uv.push(x / 6, z / 6);
       }
     }
@@ -71,32 +77,44 @@ export class HeightGrid {
         idx.push(a, b, d, b, c, d);
       }
     }
-    if (skirt > 0) {
-      // Vertical skirt along the border hides cracks with a coarser neighbouring grid.
+    if (skirt) {
+      // Vertical strip along the border that closes the seam with a coarser neighbouring grid.
+      // With a function, each border vertex is joined to the neighbour's surface height (the
+      // strip flips facing on its own whether the neighbour is lower or higher).
+      const bottom = typeof skirt === 'number' ? (_x: number, _z: number, h: number) => h - skirt : skirt;
       const border: number[] = [];
       for (let i = 0; i < n; i++) border.push(i);
       for (let j = 1; j < n; j++) border.push(j * n + n - 1);
       for (let i = n - 2; i >= 0; i--) border.push((n - 1) * n + i);
       for (let j = n - 2; j > 0; j--) border.push(j * n);
       border.push(0);
-      const base = pos.length / 3;
-      for (let k = 0; k < border.length; k++) {
-        const v = border[k];
-        pos.push(pos[v * 3], pos[v * 3 + 1] - skirt, pos[v * 3 + 2]);
+      const top = pos.length / 3;
+      const copy = (v: number, y: number) => {
+        pos.push(pos[v * 3], y, pos[v * 3 + 2]);
         col.push(col[v * 3], col[v * 3 + 1], col[v * 3 + 2]);
+        if (splatFn) spl.push(spl[v * 4], spl[v * 4 + 1], spl[v * 4 + 2], spl[v * 4 + 3]);
         uv.push(uv[v * 2], uv[v * 2 + 1]);
-      }
+      };
+      for (const v of border) copy(v, pos[v * 3 + 1]);
+      const base = pos.length / 3;
+      for (const v of border) copy(v, bottom(pos[v * 3], pos[v * 3 + 2], pos[v * 3 + 1]));
       for (let k = 0; k < border.length - 1; k++) {
-        const t0 = border[k], t1 = border[k + 1], b0 = base + k, b1 = base + k + 1;
-        idx.push(t0, b0, t1, t1, b0, b1);
+        const t0 = top + k, t1 = top + k + 1, b0 = base + k, b1 = base + k + 1;
+        idx.push(t0, t1, b0, t1, b1, b0);
       }
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    if (splatFn) g.setAttribute('splat', new THREE.Float32BufferAttribute(spl, 4));
     g.setIndex(idx);
     g.computeVertexNormals();
+    // Degenerate seam quads (zero height) get no normal: give them a valid one.
+    const nrm = g.getAttribute('normal');
+    for (let i = 0; i < nrm.count; i++) {
+      if (Math.abs(nrm.getX(i)) + Math.abs(nrm.getY(i)) + Math.abs(nrm.getZ(i)) < 1e-6) nrm.setXYZ(i, 0, 1, 0);
+    }
     return g;
   }
 }
@@ -113,7 +131,7 @@ export class EarthTerrain {
   outer: HeightGrid;
   readonly mesh = new THREE.Group();
 
-  constructor(detail: 'low' | 'high') {
+  constructor(private detail: 'low' | 'high') {
     const innerSpacing = detail === 'high' ? 3.2 : 4;
     const innerHalf = INNER_HALF;
     this.inner = new HeightGrid(-innerHalf, -innerHalf, innerSpacing, Math.round((innerHalf * 2) / innerSpacing) + 1, (x, z) => this.raw(x, z));
@@ -125,7 +143,12 @@ export class EarthTerrain {
     const n = this.noise;
     const box = Math.max(Math.abs(x), Math.abs(z));
     const flat = smoothstep(150, 215, box);
-    const hills = (n.fbm(x / 280, z / 280, 4) * 0.5 + 0.5) * 34 + n.fbm(x / 70 + 7, z / 70 - 3, 3) * 4;
+    // Fine relief fades out towards the edge of the detailed grid so the coarse outer grid
+    // (32 m cells) matches it there without visible steps.
+    const detail = 1 - smoothstep(INNER_HALF - 90, INNER_HALF - 10, box);
+    const broad = n.fbm(x / 280, z / 280, 4);
+    const broadLow = (n.fbm(x / 280, z / 280, 2) * 1.5) / 1.875; // first two octaves of `broad`
+    const hills = ((broadLow + (broad - broadLow) * detail) * 0.5 + 0.5) * 34 + n.fbm(x / 70 + 7, z / 70 - 3, 3) * 4 * detail;
     const r = Math.hypot(x, z);
     const mountains = smoothstep(480, 1100, r) * (160 + n.fbm(x / 260, z / 260, 5) * 140);
     const dc = Math.hypot(x - CRASH_SITE.x, z - CRASH_SITE.z);
@@ -162,14 +185,43 @@ export class EarthTerrain {
       if (pe < 1.3) tmp.lerp(dirt, smoothstep(1.3, 0.9, pe) * 0.7);
       return tmp;
     };
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, map: tex('grass'), roughness: 0.95, metalness: 0 });
-    const innerMesh = new THREE.Mesh(this.inner.buildGeometry(colorFn, 4), mat);
+    // Splat weights (grass, dirt, rock, snow): the photographic material reads them; the vertex
+    // colours then only carry a tint (scorched crater, darker pond banks, dry patches).
+    const white = new THREE.Color(1, 1, 1);
+    const tintFn = (x: number, z: number, h: number, slope: number) => {
+      tmp.copy(white);
+      const dc = Math.hypot(x - CRASH_SITE.x, z - CRASH_SITE.z);
+      if (dc < 16) tmp.lerp(scorch, smoothstep(16, 6, dc) * 0.85);
+      const v = this.noise.noise(x / 90 + 3, z / 90) * 0.5 + 0.5;
+      tmp.lerp(new THREE.Color(0.86, 0.9, 0.82), v * 0.35);
+      void h; void slope;
+      return tmp;
+    };
+    const splatFn: SplatFn = (x, z, h, slope) => {
+      const v = this.noise.noise(x / 40, z / 40) * 0.5 + 0.5;
+      let rock = Math.max(smoothstep(0.38, 0.75, slope), smoothstep(150, 225, h) * 0.9);
+      const snow = smoothstep(230, 290, h) * (1 - smoothstep(0.9, 1.3, slope));
+      let dirt = smoothstep(0.62, 0.95, v) * 0.55 + smoothstep(0.2, 0.4, slope) * 0.3;
+      const dc = Math.hypot(x - CRASH_SITE.x, z - CRASH_SITE.z);
+      if (dc < 32) { dirt = Math.max(dirt, smoothstep(32, 12, dc)); rock = Math.max(rock, smoothstep(10, 4, dc) * 0.5); }
+      const pe = ((x - POND.x) / POND.rx) ** 2 + ((z - POND.z) / POND.rz) ** 2;
+      if (pe < 1.4) dirt = Math.max(dirt, smoothstep(1.4, 0.95, pe));
+      const grass = Math.max(0, 1 - rock - dirt - snow);
+      return [grass, dirt, rock * (1 - snow), snow];
+    };
+    const splatMat = terrainMaterial(currentAssets(), this.detail);
+    const mat = splatMat ?? new THREE.MeshStandardMaterial({ vertexColors: true, map: tex('grass'), roughness: 0.95, metalness: 0 });
+    const geoColor = splatMat ? tintFn : colorFn;
+    const innerMesh = new THREE.Mesh(this.inner.buildGeometry(geoColor, (x, z, h) => {
+      const o = this.outer.heightAt(x, z) - 0.05;
+      return o < h ? Math.min(o - 0.3, h - 0.5) : o + 0.02;
+    }, splatFn), mat);
     innerMesh.receiveShadow = true;
     innerMesh.name = 'terrain-inner';
     this.mesh.add(innerMesh);
 
     // Outer grid without the cells already covered by the inner grid.
-    const og = this.outer.buildGeometry(colorFn);
+    const og = this.outer.buildGeometry(geoColor, 0, splatFn);
     const idx = og.getIndex()!.array as Uint32Array | Uint16Array;
     const pos = og.getAttribute('position');
     const keep: number[] = [];
@@ -183,8 +235,8 @@ export class EarthTerrain {
       if (!inside) keep.push(idx[t], idx[t + 1], idx[t + 2]);
     }
     og.setIndex(keep);
-    const outerMat = mat.clone();
-    outerMat.map = null;
+    let outerMat = mat;
+    if (!splatMat) { outerMat = mat.clone(); outerMat.map = null; }
     const outerMesh = new THREE.Mesh(og, outerMat);
     outerMesh.position.y = -0.05;
     outerMesh.receiveShadow = false;

@@ -37,7 +37,7 @@ export class EarthZone implements Zone {
     this.root.add(this.house.group);
     this.town = new Town(this.physics, this.terrain, q.treeCount);
     this.root.add(this.town.group);
-    this.folk = new Townsfolk(this.physics, q.particleBudget >= 1500 ? 14 : 8, q.particleBudget >= 1500 ? 7 : 4);
+    this.folk = new Townsfolk(this.physics, q.particleBudget >= 1500 ? 16 : 8, q.particleBudget >= 1500 ? 8 : 4, q.particleBudget >= 3000);
     this.root.add(this.folk.group);
     this.sky = new EarthSky(q.rainDrops, q.viewDistance);
     this.sky.configureShadows(q.shadows, q.shadowMapSize);

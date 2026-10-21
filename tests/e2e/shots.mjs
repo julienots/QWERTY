@@ -1,10 +1,12 @@
 // Visual QA: node tests/e2e/shots.mjs <outDir> <prefix> '<json list of {name, x,y,z, yaw, pitch, time}>'
 import { chromium } from 'playwright';
+import { writeFileSync } from 'node:fs';
 const [out, prefix, json] = process.argv.slice(2);
 const views = JSON.parse(json);
 const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const page = await b.newPage({ viewport: { width: 1280, height: 720 } });
 page.on('pageerror', (e) => console.log('pageerror', e.message));
+page.on('console', (m) => { if (/context|WebGL|GL_/i.test(m.text())) console.log('console:', m.text().slice(0, 200)); });
 await page.addInitScript(() => localStorage.setItem('ua.settings', JSON.stringify({ autoQuality: false, quality: 'high' })));
 await page.goto('http://localhost:4173/');
 await page.waitForSelector('#title:not(.hidden)', { timeout: 180000 });
@@ -13,7 +15,7 @@ await page.click('[data-testid=body-male]');
 await page.waitForFunction(() => window.__UA?.ready);
 await page.evaluate(() => { const g = window.__UA; g.paused = true; g.hud.clearDialog(); document.querySelector('.controls').style.display = 'none'; });
 for (const v of views) {
-  await page.evaluate((v) => {
+  const png = await page.evaluate((v) => {
     const g = window.__UA;
     if (v.setup) new Function('g', v.setup)(g);
     g.player.setPosition(v.x, v.y, v.z);
@@ -26,10 +28,12 @@ for (const v of views) {
     if (v.hidePlayer) g.player.root.visible = false;
     if (g.composer) g.composer.render(); else g.renderer.render(g.scene, g.camera);
     g.player.root.visible = !v.hidePlayer;
+    // Read the frame back right away (software GL can be mid-frame when the page is captured).
+    return v.hud ? null : g.renderer.domElement.toDataURL('image/png');
   }, v);
   console.log(v.name, JSON.stringify(await page.evaluate(() => ({ cam: window.__UA.camera.position.toArray().map((x) => +x.toFixed(2)), paused: window.__UA.paused }))));
-  await page.waitForTimeout(300);
-  await page.screenshot({ path: `${out}/${prefix}-${v.name}.png` });
+  if (png) writeFileSync(`${out}/${prefix}-${v.name}.png`, Buffer.from(png.split(',')[1], 'base64'));
+  else { await page.waitForTimeout(300); await page.screenshot({ path: `${out}/${prefix}-${v.name}.png`, timeout: 180000 }); }
 }
 await b.close();
 process.exit(0);

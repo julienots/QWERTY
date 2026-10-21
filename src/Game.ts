@@ -174,7 +174,7 @@ export class Game {
     const size = this.renderer.getSize(new THREE.Vector2());
     const c = new EffectComposer(this.renderer);
     c.addPass(new RenderPass(this.scene, this.camera));
-    c.addPass(new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.55, 0.5, 0.85));
+    c.addPass(new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.32, 0.45, 0.92));
     c.addPass(new OutputPass());
     this.composer = c;
   }

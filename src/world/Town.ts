@@ -6,8 +6,8 @@ import type { EarthTerrain } from './Terrain';
 import { CRASH_SITE, POND, WATER_LEVEL } from './Terrain';
 import { batchStatic, block, boxGeo, mat, placeModel, currentAssets } from './build';
 import { instanceModel, variantRoots, TreeField, type InstanceSpec } from './Instanced';
-import { facadeTexture, tex } from '../fx/textures';
-import { mulberry32 } from '../core/noise';
+import { facadeTexture, tex, waterNormalTexture } from '../fx/textures';
+import { mulberry32, Noise2D, smoothstep } from '../core/noise';
 
 /** Road segments (axis-aligned): [x0, z0, x1, z1, width] */
 export const ROADS: [number, number, number, number, number][] = [
@@ -38,6 +38,7 @@ export class Town {
   private windowMats: THREE.MeshStandardMaterial[] = [];
   private lampMat!: THREE.MeshStandardMaterial;
   private poolMat!: THREE.MeshBasicMaterial;
+  private waterMat?: THREE.MeshPhysicalMaterial;
   private trees: TreeField | null = null;
   private shard!: THREE.Group;
   private shardLight!: THREE.PointLight;
@@ -307,7 +308,12 @@ export class Town {
 
   // ------------------------------------------------------------------ park
   private buildPark() {
-    const water = new THREE.Mesh(new THREE.CircleGeometry(1, 48), new THREE.MeshStandardMaterial({ color: '#2b5f78', roughness: 0.05, metalness: 0.35, transparent: true, opacity: 0.88 }));
+    // Rippled, reflective water: two scrolling normal layers over the sky environment.
+    const ripples = waterNormalTexture();
+    const n1 = ripples.clone(); n1.repeat.set(5, 3);
+    const waterMat = new THREE.MeshPhysicalMaterial({ color: '#1d4250', roughness: 0.12, metalness: 0, transmission: 0, transparent: true, opacity: 0.92, normalMap: n1, normalScale: new THREE.Vector2(0.35, 0.35), clearcoat: 1, clearcoatRoughness: 0.04, clearcoatNormalMap: ripples, clearcoatNormalScale: new THREE.Vector2(0.25, 0.25), specularIntensity: 0.6 });
+    this.waterMat = waterMat;
+    const water = new THREE.Mesh(new THREE.CircleGeometry(1, 48), waterMat);
     water.rotation.x = -Math.PI / 2;
     water.scale.set(POND.rx * 1.12, POND.rz * 1.12, 1);
     water.position.set(POND.x, WATER_LEVEL, POND.z);
@@ -473,27 +479,44 @@ export class Town {
   // ------------------------------------------------------------------ trees
   private buildTrees(count: number) {
     const rnd = mulberry32(99);
-    const positions: [number, number, number, number][] = [];
+    const forest = new Noise2D(77);
+    // [x, y, z, scale, kind] — kind 0 broadleaf, 1 fir
+    const positions: [number, number, number, number, number][] = [];
+    const target = Math.round(count * 2.6);
     let guard = 0;
-    while (positions.length < count && guard++ < count * 30) {
-      const near = rnd() < 0.55;
-      const x = near ? (rnd() - 0.5) * 330 : (rnd() - 0.5) * 640;
-      const z = near ? (rnd() - 0.5) * 330 : (rnd() - 0.5) * 640;
+    while (positions.length < target && guard++ < target * 40) {
+      // Town trees in the first 45 %, then forests on the hills out to ~950 m.
+      const inTown = positions.length < count * 0.45;
+      const x = inTown ? (rnd() - 0.5) * 330 : (rnd() - 0.5) * 1900;
+      const z = inTown ? (rnd() - 0.5) * 330 : (rnd() - 0.5) * 1900;
+      const box = Math.max(Math.abs(x), Math.abs(z));
+      if (!inTown) {
+        if (box < 150) continue;
+        // Forest patches: dense woods, clearings and lone trees.
+        const d = forest.fbm(x / 210, z / 210, 3) * 0.5 + 0.5;
+        if (rnd() > smoothstep(0.38, 0.62, d) * 0.95 + 0.03) continue;
+      }
       if (onRoad(x, z, 3)) continue;
       if (this.footprints.some(([a, b, c, d]) => x > a - 1.5 && x < c + 1.5 && z > b - 1.5 && z < d + 1.5)) continue;
       if (Math.hypot(x - CRASH_SITE.x, z - CRASH_SITE.z) < 28) continue;
+      if (((x - POND.x) / (POND.rx + 6)) ** 2 + ((z - POND.z) / (POND.rz + 6)) ** 2 < 1) continue;
       // keep front yards along the main street mostly open
       if (Math.abs(z - 17) < 14 && Math.abs(x) < 170 && rnd() < 0.8) continue;
       const y = this.terrain.heightAt(x, z);
-      if (y < 0.05 && Math.abs(x) > 150) continue;
-      positions.push([x, y, z, 0.7 + rnd() * 0.7]);
+      if (y < 0.05 && box > 150) continue;
+      if (y > 205) continue; // tree line
+      const slope = Math.hypot(this.terrain.heightAt(x + 2, z) - this.terrain.heightAt(x - 2, z), this.terrain.heightAt(x, z + 2) - this.terrain.heightAt(x, z - 2)) / 4;
+      if (slope > 0.75) continue;
+      const fir = rnd() < (inTown ? 0.3 : smoothstep(10, 90, y) * 0.75 + 0.15);
+      const sc = inTown ? 1.0 + rnd() * 0.55 : 1.3 + rnd() * 0.9;
+      positions.push([x, y, z, fir ? sc * 0.9 : sc, fir ? 1 : 0]);
     }
     for (const [x, y, z, sc] of positions) {
       if (Math.abs(x) < 330 && Math.abs(z) < 330) this.physics.addBox(x - 0.3 * sc, y - 1, z - 0.3 * sc, x + 0.3 * sc, y + 2.6 * sc, z + 0.3 * sc, 'tree');
     }
     // Real trees (Blender-generated, Poly Haven bark & leaves) with distance LOD
-    const field = new TreeField(positions.map(([x, y, z, sc], i) => ({
-      x, y: y - 0.15, z, rotY: rnd() * Math.PI * 2, kind: i % 3 === 0 ? 1 : 0, variant: i, scale: i % 3 === 0 ? sc * 0.85 : sc * 1.05,
+    const field = new TreeField(positions.map(([x, y, z, sc, kind], i) => ({
+      x, y: y - 0.15, z, rotY: rnd() * Math.PI * 2, kind, variant: i, scale: sc,
     })), [['tree_broadleaf', 'tree_broadleaf_lod'], ['tree_fir', 'tree_fir_lod']]);
     if (field.ok) {
       this.trees = field;
@@ -508,8 +531,8 @@ export class Town {
     const pineGeo = new THREE.ConeGeometry(1.6, 4.8, 9);
     pineGeo.translate(0, 4.2, 0);
     const trunks = new THREE.InstancedMesh(trunkGeo, mat('#7a5c44', { rough: 1 }), positions.length);
-    const leafy = positions.filter((_, i) => i % 3 !== 0);
-    const pines = positions.filter((_, i) => i % 3 === 0);
+    const leafy = positions.filter((p) => p[4] === 0);
+    const pines = positions.filter((p) => p[4] === 1);
     const leafMat = new THREE.MeshStandardMaterial({ roughness: 0.85, flatShading: true });
     const leafs = new THREE.InstancedMesh(leafyGeo, leafMat, leafy.length);
     const pineMesh = new THREE.InstancedMesh(pineGeo, new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: true }), pines.length);
@@ -617,6 +640,10 @@ export class Town {
 
   update(dt: number, game: Game, night: number) {
     this.trees?.update(dt, game.camera.position);
+    if (this.waterMat) {
+      this.waterMat.normalMap!.offset.x += dt * 0.012;
+      this.waterMat.clearcoatNormalMap!.offset.y -= dt * 0.009;
+    }
     for (const wm of this.windowMats) wm.emissiveIntensity = night * 1.1;
     this.lampMat.emissiveIntensity = night * 3;
     this.poolMat.opacity = night * 0.55;

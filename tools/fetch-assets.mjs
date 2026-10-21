@@ -9,7 +9,7 @@
  * system proxy configuration is honoured.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync, copyFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync, copyFileSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import sharp from 'sharp';
 import * as M from './assets.manifest.mjs';
@@ -22,7 +22,7 @@ const ONLY = process.argv.find((a) => a.startsWith('--only='))?.slice(7);
 const credits = [];
 
 const mk = (p) => mkdirSync(p, { recursive: true });
-const want = (name) => !ONLY || ONLY === name;
+const want = (name) => !ONLY || ONLY.split(',').includes(name);
 const fresh = (p) => !FORCE && existsSync(p) && statSync(p).size > 0;
 const kb = (p) => Math.round(statSync(p).size / 1024);
 
@@ -43,13 +43,21 @@ function gltfTransform(args) {
   execFileSync(join(ROOT, 'node_modules', '.bin', 'gltf-transform'), args, { stdio: ['ignore', 'ignore', 'inherit'] });
 }
 
-function optimizeModel(input, output, { simplify = 1, textureSize = 512, character = false, variants = false } = {}) {
+function optimizeModel(input, output, { simplify = 1, simplifyError = 0.002, textureSize = 512, character = false, variants = false } = {}) {
   const args = ['optimize', input, output, '--compress', 'meshopt', '--texture-compress', 'webp', '--texture-size', String(textureSize), '--instance', 'false', '--palette', 'false'];
   if (character || variants) args.push('--flatten', 'false', '--join', 'false');
   if (character) args.push('--simplify', 'false');
-  if (character) { /* keep geometry intact */ } else if (simplify < 1) args.push('--simplify', 'true', '--simplify-ratio', String(simplify), '--simplify-error', '0.002');
+  if (character) { /* keep geometry intact */ } else if (simplify < 1) args.push('--simplify', 'true', '--simplify-ratio', String(simplify), '--simplify-error', String(simplifyError));
   else args.push('--simplify', 'false');
   gltfTransform(args);
+  if (!character && simplify < 1 && simplifyError >= 0.01) {
+    // Photoscans keep split vertices along UV seams and hard normals, which blocks the
+    // simplifier; once quantized those duplicates coincide, so weld and simplify again.
+    const tmp = output.replace(/\.glb$/, '.tmp.glb');
+    gltfTransform(['weld', output, tmp]);
+    gltfTransform(['simplify', tmp, output, '--ratio', String(simplify), '--error', String(simplifyError)]);
+    rmSync(tmp, { force: true });
+  }
 }
 
 async function image(input, output, width, quality = 82) {
@@ -71,7 +79,7 @@ for (const m of M.polyhavenModels) {
   if (!m.out) { console.log(`  · ${m.id}: source brute en cache`); continue; }
   const out = join(OUT, 'models', `${m.out}.glb`);
   mk(dirname(out));
-  if (!fresh(out)) optimizeModel(main, out, { simplify: m.simplify, textureSize: m.textureSize ?? 512, variants: m.variants });
+  if (!fresh(out)) optimizeModel(main, out, { simplify: m.simplify, simplifyError: m.simplifyError, textureSize: m.textureSize ?? 512, variants: m.variants });
   console.log(`  ✓ ${m.out}.glb (${kb(out)} Ko) ← Poly Haven ${m.id}`);
   } catch (e) { failures.push(m.id); console.log(`  ✘ ${m.id}: ${e.message.split('\n')[0]}`); }
 }

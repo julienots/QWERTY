@@ -326,3 +326,34 @@ export class ScreenTexture {
     if (on) this.draw(true);
   }
 }
+
+/** Tileable water ripple normal map (sum of integer-frequency waves, so it wraps seamlessly). */
+export function waterNormalTexture(): THREE.Texture {
+  const hit = cache.get('water-normal');
+  if (hit) return hit;
+  const size = 256;
+  const [c, ctx] = canvas(size);
+  const rnd = mulberry32(4242);
+  const waves = Array.from({ length: 14 }, () => ({ kx: Math.round((rnd() * 2 - 1) * 9), kz: Math.round((rnd() * 2 - 1) * 9), a: 0.4 + rnd(), p: rnd() * Math.PI * 2 }))
+    .filter((w) => w.kx || w.kz);
+  const img = ctx.createImageData(size, size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      let dx = 0, dz = 0;
+      const u = (x / size) * Math.PI * 2, v = (y / size) * Math.PI * 2;
+      for (const w of waves) {
+        const k = Math.hypot(w.kx, w.kz);
+        const cs = Math.cos(w.kx * u + w.kz * v + w.p) * w.a / k;
+        dx += cs * w.kx; dz += cs * w.kz;
+      }
+      const n = new THREE.Vector3(-dx * 0.18, -dz * 0.18, 1).normalize();
+      const i = (y * size + x) * 4;
+      img.data[i] = (n.x * 0.5 + 0.5) * 255;
+      img.data[i + 1] = (n.y * 0.5 + 0.5) * 255;
+      img.data[i + 2] = (n.z * 0.5 + 0.5) * 255;
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return finish(c, 'water-normal', 1, false);
+}

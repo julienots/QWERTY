@@ -4,6 +4,7 @@ import type { Game } from '../Game';
 import type { Interactable } from './Zone';
 import { batchStatic, block, boxGeo, glassMaterial, mat, placeModel, type Placement } from './build';
 import { ScreenTexture } from '../fx/textures';
+import { makeVehicle } from './Vehicles';
 
 /**
  * The player's home: five furnished rooms, working doors, light switches, TV, radio,
@@ -635,7 +636,7 @@ export class House {
       if (o) { g.add(o); if (m !== 'shrub_a') p.addBox(pl.x - pl.w / 2, 0, pl.z - pl.d / 2, pl.x + pl.w / 2, pl.h, pl.z + pl.d / 2); }
     }
     // Family car in the driveway
-    const car = makeCar('#b23a3a');
+    const car = makeVehicle('#b23a3a', 'car_hatch');
     car.position.set(9.3, 0, 6.5);
     car.rotation.y = Math.PI;
     g.add(car);

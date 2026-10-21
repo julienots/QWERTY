@@ -2,7 +2,8 @@
  * Every third-party asset used by the game, with its source and licence.
  * `tools/fetch-assets.mjs` downloads, optimises and credits everything listed here.
  *
- * simplify: target ratio of vertices to keep (photoscans are far too dense for phones).
+ * simplify: target ratio of vertices to keep (photoscans are far too dense for phones);
+ * simplifyError: max geometric error allowed while simplifying (default 0.002).
  */
 
 export const POLYHAVEN = 'Poly Haven (polyhaven.com) — CC0 1.0';
@@ -16,7 +17,7 @@ export const polyhavenModels = [
   { id: 'modern_coffee_table_01', out: 'coffee_table', simplify: 0.6 },
   { id: 'Television_01', out: 'television', simplify: 1 },
   { id: 'WoodenTable_01', out: 'dining_table', simplify: 1 },
-  { id: 'WoodenChair_01', out: 'chair', simplify: 0.6 },
+  { id: 'WoodenChair_01', out: 'chair', simplify: 0.2, simplifyError: 0.004 },
   { id: 'old_bed_frame', out: 'bed_frame', simplify: 0.12 },
   { id: 'ClassicNightstand_01', out: 'nightstand', simplify: 0.8 },
   { id: 'small_wooden_table_01', out: 'desk', simplify: 0.8 },
@@ -24,7 +25,7 @@ export const polyhavenModels = [
   { id: 'classic_laptop', out: 'laptop', simplify: 0.3 },
   { id: 'wooden_bookshelf_worn', out: 'bookshelf', simplify: 0.4 },
   { id: 'drawer_cabinet', out: 'wardrobe', simplify: 0.25 },
-  { id: 'potted_plant_02', out: 'plant', simplify: 0.1 },
+  { id: 'potted_plant_02', out: 'plant', simplify: 0.08, simplifyError: 0.01 },
   { id: 'modern_ceiling_lamp_01', out: 'ceiling_lamp', simplify: 0.6 },
   { id: 'desk_lamp_arm_01', out: 'desk_lamp', simplify: 0.25 },
   { id: 'electric_stove', out: 'stove', simplify: 0.35 },
@@ -33,7 +34,7 @@ export const polyhavenModels = [
   { id: 'hanging_picture_frame_01', out: 'picture_frame', simplify: 1 },
   { id: 'throw_pillows_01', out: 'pillows', simplify: 0.4 },
   // --- town
-  { id: 'street_lamp_01', out: 'street_lamp', simplify: 0.12 },
+  { id: 'street_lamp_01', out: 'street_lamp', simplify: 0.1, simplifyError: 0.006 },
   { id: 'fire_hydrant', out: 'fire_hydrant', variants: true, simplify: 0.04 },
   { id: 'metal_trash_can', out: 'dumpster', simplify: 0.3 },
   { id: 'modular_street_seating', out: 'street_bench', simplify: 0.15 },
@@ -48,11 +49,11 @@ export const polyhavenModels = [
   { id: 'covered_car', out: 'covered_car', simplify: 0.5 },
   { id: 'exterior_aircon_unit', out: 'aircon', variants: true, simplify: 0.2 },
   { id: 'shrub_03', out: 'shrub_a', variants: true, simplify: 0.5 },
-  { id: 'shrub_04', out: 'shrub_b', variants: true, simplify: 0.2 },
-  { id: 'fern_02', out: 'fern', variants: true, simplify: 0.7 },
-  { id: 'boulder_01', out: 'boulder', simplify: 0.04 },
-  { id: 'rock_moss_set_01', out: 'mossy_rocks', variants: true, simplify: 0.08 },
-  { id: 'tree_stump_01', out: 'tree_stump', simplify: 0.1 },
+  { id: 'shrub_04', out: 'shrub_b', variants: true, simplify: 0.06, simplifyError: 0.006 },
+  { id: 'fern_02', out: 'fern', variants: true, simplify: 0.35, simplifyError: 0.01 },
+  { id: 'boulder_01', out: 'boulder', simplify: 0.01, simplifyError: 0.02 },
+  { id: 'rock_moss_set_01', out: 'mossy_rocks', variants: true, simplify: 0.02, simplifyError: 0.02 },
+  { id: 'tree_stump_01', out: 'tree_stump', simplify: 0.02, simplifyError: 0.02 },
   // --- moon
   { id: 'moon_rock_01', out: 'moon_rock_1', simplify: 0.12 },
   { id: 'moon_rock_02', out: 'moon_rock_2', simplify: 0.3 },

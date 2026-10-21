@@ -2,7 +2,9 @@ import * as THREE from 'three';
 import type { CollisionWorld, Box } from '../physics/CollisionWorld';
 import type { Game } from '../Game';
 import { Humanoid } from '../player/Humanoid';
-import { makeCar } from './House';
+import { CharacterModel, type Avatar } from '../player/CharacterModel';
+import { currentAssets } from './build';
+import { makeVehicle, spinWheels, type CarModel } from './Vehicles';
 import { angleLerp, mulberry32 } from '../core/noise';
 
 type NpcState = 'walk' | 'idle' | 'flee' | 'watch' | 'hidden';
@@ -19,7 +21,7 @@ const REMARKS_FIGHT = ['Au secours !', 'Fuyez !', 'Ces créatures…', 'Vite, à
 const REMARKS_HELLO = ['Bonjour !', 'Belle journée, hein ?', 'Tu as vu les lumières cette nuit ?', 'Salut voisin !'];
 
 class Npc {
-  model: Humanoid;
+  model: Avatar;
   pos = new THREE.Vector3();
   yaw = 0;
   target = new THREE.Vector3();
@@ -28,9 +30,18 @@ class Npc {
   speed = 0;
   remarkCooldown = 0;
   lane = 0;
-  constructor(colors: { skin: string; suit: string; pants: string; hair: string; accent: string }) {
-    this.model = new Humanoid(colors, 'low');
-    this.model.root.traverse((o) => { o.castShadow = false; });
+  constructor(colors: { skin: string; suit: string; pants: string; hair: string; accent: string }, female: boolean, height: number, shadows: boolean) {
+    // Real rigged, animated people when the models are loaded; procedural figures otherwise.
+    const assets = currentAssets();
+    const kind = female ? 'human_female' : 'human_male';
+    if (CharacterModel.available(assets, kind)) {
+      const c = new CharacterModel(assets!, kind, { height, castShadow: shadows });
+      c.tint(new THREE.Color(colors.suit), 0.12);
+      this.model = c;
+    } else {
+      this.model = new Humanoid(colors, 'low');
+      this.model.root.traverse((o) => { o.castShadow = false; });
+    }
   }
 }
 
@@ -40,8 +51,8 @@ class Car {
   speed = 0;
   yaw = 0;
   box: Box;
-  constructor(public loop: number, color: string, s: number, physics: CollisionWorld) {
-    this.group = makeCar(color);
+  constructor(public loop: number, color: string, s: number, physics: CollisionWorld, model: CarModel) {
+    this.group = makeVehicle(color, model);
     this.s = s;
     this.box = physics.addDynamicBox('car');
   }
@@ -86,14 +97,15 @@ export class Townsfolk {
   private cars: Car[] = [];
   private rnd = mulberry32(1234);
 
-  constructor(private physics: CollisionWorld, npcCount: number, carCount: number) {
+  constructor(private physics: CollisionWorld, npcCount: number, carCount: number, shadows = false) {
     const skins = ['#f1c6a6', '#e0b48f', '#c68e63', '#8d5a3b', '#5c3a24', '#f6d7c3'];
     const clothes = ['#c0392b', '#2e86de', '#27ae60', '#8e44ad', '#f39c12', '#34495e', '#e84393', '#16a085', '#d35400'];
     const pants = ['#2c3e50', '#3d3d3d', '#5b4636', '#1f3a5f', '#6b6b6b'];
     const hair = ['#2b1d14', '#5a3a22', '#d9b26f', '#111111', '#8a8a8a', '#a0522d'];
     const pick = <T,>(a: T[]) => a[Math.floor(this.rnd() * a.length)];
     for (let i = 0; i < npcCount; i++) {
-      const n = new Npc({ skin: pick(skins), suit: pick(clothes), pants: pick(pants), hair: pick(hair), accent: '#222222' });
+      const female = i % 3 !== 0;
+      const n = new Npc({ skin: pick(skins), suit: pick(clothes), pants: pick(pants), hair: pick(hair), accent: '#222222' }, female, (female ? 1.6 : 1.7) + this.rnd() * 0.2, shadows);
       const sw = SIDEWALKS[i % SIDEWALKS.length];
       n.lane = i % SIDEWALKS.length;
       const t = this.rnd();
@@ -105,7 +117,7 @@ export class Townsfolk {
     const colors = ['#2b6cb0', '#e2e8f0', '#1a202c', '#c53030', '#2f855a', '#d69e2e', '#718096'];
     for (let i = 0; i < carCount; i++) {
       const loop = i % 2;
-      const car = new Car(loop, colors[i % colors.length], (i / carCount) * loopLength(LOOPS[loop]) + i * 13, physics);
+      const car = new Car(loop, colors[i % colors.length], (i / carCount) * loopLength(LOOPS[loop]) + i * 13, physics, i % 3 === 1 ? 'car_hatch' : 'car_sedan');
       this.cars.push(car);
       this.group.add(car.group);
     }
@@ -221,6 +233,7 @@ export class Townsfolk {
       const target = blocked ? 0 : 9;
       car.speed += (target - car.speed) * Math.min(1, dt * (blocked ? 4 : 0.8));
       car.s += car.speed * dt;
+      spinWheels(car.group, car.speed * dt);
       car.yaw = angleLerp(car.yaw, p.yaw, Math.min(1, dt * 5));
       const inter = Math.min(Math.abs(Math.abs(p.x) - 60), 99) < 6 && (Math.abs(p.z - 17) < 6 || Math.abs(p.z + 75) < 6);
       car.group.position.set(p.x, inter ? 0.16 : 0.03, p.z);

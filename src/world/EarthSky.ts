@@ -168,7 +168,7 @@ export class EarthSky {
     const fc = nightC.clone().lerp(day, sunUp).lerp(dusk, clamp(duskAmt, 0, 0.7)).lerp(grey.multiplyScalar(lerp(0.15, 1, sunUp)), w.clouds * 0.6);
     this.fog.color.copy(fc);
     const base = 2.4 / this.viewDistance;
-    this.fog.density = (base + w.fog * 0.012 + w.rain * 0.002) * (1 - altitudeFade);
+    this.fog.density = (base + w.fog * 0.0075 + w.rain * 0.002) * (1 - altitudeFade);
 
     // Stars & moon
     (this.stars.material as THREE.PointsMaterial).opacity = Math.max(this.night * (1 - w.clouds * 0.8), altitudeFade);

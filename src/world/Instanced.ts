@@ -9,10 +9,12 @@ export interface InstanceSpec {
   color?: THREE.Color;
 }
 
-/** Meshes (with their transform relative to `root`) under a model or one of its variants. */
+/** Meshes (with their transform relative to `root`'s parent) under a model or one of its variants. */
 function meshesOf(root: THREE.Object3D): { mesh: THREE.Mesh; matrix: THREE.Matrix4 }[] {
   root.updateMatrixWorld(true);
-  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+  // Relative to the root's parent: the root node itself may carry the mesh dequantization
+  // scale (KHR_mesh_quantization), which must be kept.
+  const inv = root.parent ? new THREE.Matrix4().copy(root.parent.matrixWorld).invert() : new THREE.Matrix4();
   const out: { mesh: THREE.Mesh; matrix: THREE.Matrix4 }[] = [];
   root.traverse((o) => {
     const m = o as THREE.Mesh;
